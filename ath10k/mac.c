@@ -8434,6 +8434,21 @@ int ath10k_copy_comb(struct ath10k* ar,
       *__val_p = b;                                 \
    } while (0)
 
+#ifdef CPTCFG_MAC80211_LEDS
+static const struct ieee80211_tpt_blink ath10k_tpt_blink[] = {
+	{ .throughput = 0 * 1024, .blink_time = 334 },
+	{ .throughput = 1 * 1024, .blink_time = 260 },
+	{ .throughput = 2 * 1024, .blink_time = 220 },
+	{ .throughput = 5 * 1024, .blink_time = 190 },
+	{ .throughput = 10 * 1024, .blink_time = 170 },
+	{ .throughput = 25 * 1024, .blink_time = 150 },
+	{ .throughput = 54 * 1024, .blink_time = 130 },
+	{ .throughput = 120 * 1024, .blink_time = 110 },
+	{ .throughput = 265 * 1024, .blink_time = 80 },
+	{ .throughput = 586 * 1024, .blink_time = 50 },
+};
+#endif
+
 int ath10k_mac_register(struct ath10k *ar)
 {
 	static const u32 cipher_suites[] = {
@@ -8710,6 +8725,12 @@ int ath10k_mac_register(struct ath10k *ar)
 
 	ar->hw->wiphy->cipher_suites = cipher_suites;
 	ar->hw->wiphy->n_cipher_suites = ARRAY_SIZE(cipher_suites);
+
+#ifdef CPTCFG_MAC80211_LEDS
+	ieee80211_create_tpt_led_trigger(ar->hw,
+		IEEE80211_TPT_LEDTRIG_FL_RADIO, ath10k_tpt_blink,
+		ARRAY_SIZE(ath10k_tpt_blink));
+#endif
 
 	ret = ieee80211_register_hw(ar->hw);
 	if (ret) {
