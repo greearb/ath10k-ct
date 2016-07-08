@@ -1,0 +1,8 @@
+#!/bin/bash
+
+KERNEL_BASE_LINUS=${HOME}/kernel/2.6/linux-linux
+
+# NOTE:  You first have to copy appropriate ath/*.h files from your
+# kernel source to ../
+make -C ${KERNEL_BASE_LINUS}.x64 SUBDIRS=$PWD modules
+
