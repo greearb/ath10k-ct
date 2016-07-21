@@ -458,7 +458,7 @@ struct ath10k_dbglog_entry_storage {
 
 /* estimated values, hopefully these are enough */
 #define ATH10K_ROM_BSS_BUF_LEN 30000
-#define ATH10K_RAM_BSS_BUF_LEN 24000
+#define ATH10K_RAM_BSS_BUF_LEN 50000
 
 /* used for crash-dump storage, protected by data-lock */
 struct ath10k_fw_crash_data {

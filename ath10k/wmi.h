@@ -6309,6 +6309,7 @@ struct wmi_roam_ev {
 #define ATH10K_DEFAULT_ATIM 0
 
 #define WMI_MAX_MEM_REQS 16
+#define WMI_MAX_MEM_CHUNK_SIZE (256 * 1024) /* 256 KB */
 
 struct wmi_scan_ev_arg {
 	__le32 event_type; /* %WMI_SCAN_EVENT_ */
