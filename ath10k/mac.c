@@ -745,7 +745,7 @@ static int ath10k_mac_set_kickout(struct ath10k_vif *arvif)
 
 	param = ar->wmi.pdev_param->sta_kickout_th;
 	ret = ath10k_wmi_pdev_set_param(ar, param,
-					ATH10K_KICKOUT_THRESHOLD);
+					ar->sta_xretry_kickout_thresh);
 	if (ret) {
 		ath10k_warn(ar, "failed to set kickout threshold on vdev %i: %d\n",
 			    arvif->vdev_id, ret);
