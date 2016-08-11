@@ -4491,7 +4491,7 @@ static int ath10k_wmi_alloc_chunk(struct ath10k *ar, u32 req_id,
 		if (!pool_size)
 			return -EINVAL;
 
-		vaddr = kzalloc(pool_size, GFP_KERNEL | __GFP_NOWARN);
+		vaddr = kzalloc(pool_size, GFP_KERNEL | __GFP_NOWARN | GFP_DMA32);
 		if (!vaddr)
 			num_units /= 2;
 	}

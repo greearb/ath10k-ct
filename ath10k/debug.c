@@ -2941,6 +2941,11 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		ar->eeprom_overrides.pdev_xretry_th = val;
 		ath10k_warn(ar, "Setting pdev-xretry-th to 0x%x\n", val);
 	}
+	else if (id == SET_SPECIAL_ID_RIFS_ENABLE) {
+		/* Enable(1)/disable(0) baseband RIFS. */
+		ar->eeprom_overrides.rifs_enable_override = val;
+		ath10k_warn(ar, "Setting RIFS enable override to 0x%x\n", val);
+	}
 	/* Below here are local driver hacks, and not passed directly to firmware. */
 	else if (id == 0x1001) {
 		/* Set station failed-transmit kickout threshold. */
@@ -2985,6 +2990,7 @@ static ssize_t ath10k_read_ct_special(struct file *file,
 		"id: 7 RC max PER Threshold: 0-256 (50 is default). Tune with Care.\n"
 		"id: 8 STA-TX-BW-MASK,  0:  all, 0x1: 20Mhz, 0x2 40Mhz, 0x4 80Mhz \n"
 		"id: 9 pdev failed retry threshold, U16, 10.1 firmware default is 0x40\n"
+		"id: 0xA Enable(1)/Disable(0) baseband RIFS.  Default is disabled.\n"
 		"\nBelow here are not actually sent to firmware directly, but configure the driver.\n"
 		"id: 0x1001 set sta-kickout threshold due to tx-failures (0 means disable.  Default is 20 * 16.)\n"
 		"\n";

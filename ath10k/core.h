@@ -1112,6 +1112,7 @@ struct ath10k {
 		u8 rc_rate_max_per_thr; /* Firmware rate-ctrl alg. tuning. */
 		u8 tx_sta_bw_mask; /* 0:  all, 0x1: 20Mhz, 0x2 40Mhz, 0x4 80Mhz */
 		bool allow_ibss_amsdu;
+		bool rifs_enable_override;
 		u16 max_txpower;
 		u16 pdev_xretry_th; /* Max failed retries before wifi chip is reset, 10.1 firmware default is 0x40 */
 	} eeprom_overrides;
