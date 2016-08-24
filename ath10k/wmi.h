@@ -5845,12 +5845,16 @@ enum wmi_peer_param {
 	WMI_PEER_CHAN_WIDTH = 0x4,
 	WMI_PEER_NSS        = 0x5,
 	WMI_PEER_USE_4ADDR  = 0x6,
+	/** Enable extended peer stats */
+	WMI_PEER_EXT_STATS_ENABLE = 0x7,
+	/*Use FIXED Pwr */
+	WMI_PEER_USE_FIXED_PWR = 0x8,
+	/* Set peer fixed rate */
+	WMI_PEER_PARAM_FIXED_RATE = 0x9,
+	/* Whitelist peer TIDs */
+	WMI_PEER_SET_MU_WHITELIST =0x10,
+
 	WMI_PEER_DUMMY_VAR  = 0xff, /* dummy parameter for STA PS workaround */
-	WMI_PEER_FETCH_RC   = 0x10 /* Fetch rate-ctrl cache from host via DMA
-				    * Call this before setting rate-ctrl logic so that
-				    * firmware will have the firmware data in it's cache.
-				    * It is racy, but better than nothing.
-				    */
 };
 
 struct wmi_peer_set_param_cmd {
@@ -6416,6 +6420,10 @@ struct wmi_roam_ev_arg {
 	__le32 rssi;
 };
 
+struct wmi_echo_ev_arg {
+	__le32 value;
+};
+
 struct wmi_pdev_temperature_event {
 	/* temperature value in Celcius degree */
 	__le32 temperature;
@@ -6805,5 +6813,7 @@ int ath10k_wmi_request_nop(struct ath10k *ar);
 #else
 #warning Please enable ATH10K-DEBUGFS kernel option for optimal support for CT firmware.
 #endif
+
+int ath10k_wmi_barrier(struct ath10k *ar);
 
 #endif /* _WMI_H_ */

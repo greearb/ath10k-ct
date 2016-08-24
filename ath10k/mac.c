@@ -232,6 +232,7 @@ static int ath10k_send_key(struct ath10k_vif *arvif,
 		.key_flags = flags,
 		.macaddr = macaddr,
 	};
+	int ret1, ret2;
 
 	lockdep_assert_held(&arvif->ar->conf_mutex);
 
@@ -265,7 +266,13 @@ static int ath10k_send_key(struct ath10k_vif *arvif,
 		arg.key_data = NULL;
 	}
 
-	return ath10k_wmi_vdev_install_key(arvif->ar, &arg);
+	ret1 = ath10k_wmi_vdev_install_key(arvif->ar, &arg);
+	ret2 = ath10k_wmi_barrier(ar);
+	if (ret2) {
+		ath10k_err(ar, "failed to ping firmware: %d\n", ret2);
+		return ret2;
+	}
+	return ret1;
 }
 
 static int ath10k_install_key(struct ath10k_vif *arvif,
@@ -4172,8 +4179,10 @@ static void ath10k_mac_txq_init(struct ieee80211_txq *txq)
 static void ath10k_mac_txq_unref(struct ath10k *ar, struct ieee80211_txq *txq)
 {
 	struct ath10k_txq *artxq = (void *)txq->drv_priv;
+	struct ath10k_txq *tmp, *walker;
 	struct ath10k_skb_cb *cb;
 	struct sk_buff *msdu;
+	struct ieee80211_txq *txq_tmp;
 	int msdu_id;
 
 	if (!txq)
@@ -4182,6 +4191,14 @@ static void ath10k_mac_txq_unref(struct ath10k *ar, struct ieee80211_txq *txq)
 	spin_lock_bh(&ar->txqs_lock);
 	if (!list_empty(&artxq->list))
 		list_del_init(&artxq->list);
+
+	/* Remove from ar->txqs in case it still exists there. */
+	list_for_each_entry_safe(walker, tmp, &ar->txqs, list) {
+		txq_tmp = container_of((void *)walker, struct ieee80211_txq,
+				       drv_priv);
+		if (txq_tmp == txq)
+			list_del(&walker->list);
+	}
 	spin_unlock_bh(&ar->txqs_lock);
 
 	spin_lock_bh(&ar->htt.tx_lock);
@@ -4297,8 +4314,8 @@ void ath10k_mac_tx_push_pending(struct ath10k *ar)
 	int max;
 	int loop_max = 2000;
 
-	spin_lock_bh(&ar->txqs_lock);
 	rcu_read_lock();
+	spin_lock_bh(&ar->txqs_lock);
 
 	last = list_last_entry(&ar->txqs, struct ath10k_txq, list);
 	while (!list_empty(&ar->txqs)) {
@@ -4332,8 +4349,8 @@ void ath10k_mac_tx_push_pending(struct ath10k *ar)
 			break;
 	}
 
-	rcu_read_unlock();
 	spin_unlock_bh(&ar->txqs_lock);
+	rcu_read_unlock();
 }
 
 /************/
@@ -6481,8 +6498,8 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 		 * Existing station deletion.
 		 */
 		ath10k_dbg(ar, ATH10K_DBG_MAC,
-			   "mac vdev %d peer delete %pM (sta gone)\n",
-			   arvif->vdev_id, sta->addr);
+			   "mac vdev %d peer delete %pM (sta gone) sta: %p\n",
+			   arvif->vdev_id, sta->addr, sta);
 
 		ret = ath10k_peer_delete(ar, arvif->vdev_id, sta->addr);
 		if (ret)
