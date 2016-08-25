@@ -5975,15 +5975,6 @@ static struct sk_buff *ath10k_wmi_10_4_op_gen_init(struct ath10k *ar)
 		    ar->htt.max_num_pending_tx, ar->skid_limit);
 	config.ast_skid_limit = __cpu_to_le32(ar->skid_limit);
 
-	/* Firmware will crash if this is not even multiple of 8.  This
-	 * does not appear to apply to 9984 NICs/firmware.
-	 */
-	if ((ar->hw_rev != ATH10K_HW_QCA9984) &&
-	    WARN_ON(ar->htt.max_num_pending_tx & 0x7)) {
-		ath10k_err(ar, "tx-descriptors must be multiple of 8: %d\n",
-			   ar->htt.max_num_pending_tx);
-	}
-
 	config.num_active_peers = __cpu_to_le32(ar->num_active_peers);
 	config.num_tids = __cpu_to_le32(ar->num_tids);
 
