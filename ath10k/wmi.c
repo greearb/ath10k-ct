@@ -1574,6 +1574,7 @@ static const struct wmi_peer_flags_map wmi_peer_flags_map = {
 	.bw80 = WMI_PEER_80MHZ,
 	.vht_2g = WMI_PEER_VHT_2G,
 	.pmf = WMI_PEER_PMF,
+	.bw160 = WMI_PEER_160MHZ,
 };
 
 static const struct wmi_peer_flags_map wmi_10x_peer_flags_map = {
@@ -1591,6 +1592,7 @@ static const struct wmi_peer_flags_map wmi_10x_peer_flags_map = {
 	.spatial_mux = WMI_10X_PEER_SPATIAL_MUX,
 	.vht = WMI_10X_PEER_VHT,
 	.bw80 = WMI_10X_PEER_80MHZ,
+	.bw160 = WMI_10X_PEER_160MHZ,
 };
 
 static const struct wmi_peer_flags_map wmi_10_2_peer_flags_map = {
@@ -1610,6 +1612,7 @@ static const struct wmi_peer_flags_map wmi_10_2_peer_flags_map = {
 	.bw80 = WMI_10_2_PEER_80MHZ,
 	.vht_2g = WMI_10_2_PEER_VHT_2G,
 	.pmf = WMI_10_2_PEER_PMF,
+	.bw160 = WMI_10_2_PEER_160MHZ,
 };
 
 static bool ath10k_ok_skip_ch_reservation(struct ath10k *ar, u32 vdev_id)
@@ -1668,7 +1671,10 @@ void ath10k_wmi_put_wmi_channel(struct ath10k *ar,
 
 	ch->mhz = __cpu_to_le32(arg->freq);
 	ch->band_center_freq1 = __cpu_to_le32(arg->band_center_freq1);
-	ch->band_center_freq2 = 0;
+	if (arg->mode == MODE_11AC_VHT80_80)
+		ch->band_center_freq2 = __cpu_to_le32(arg->band_center_freq2);
+	else
+		ch->band_center_freq2 = 0;
 	ch->min_power = arg->min_power;
 	ch->max_power = arg->max_power;
 	ch->reg_power = arg->max_reg_power;
@@ -4508,7 +4514,7 @@ static int ath10k_wmi_alloc_chunk(struct ath10k *ar, u32 req_id,
 		if (!pool_size)
 			return -EINVAL;
 
-		vaddr = kzalloc(pool_size, GFP_KERNEL | __GFP_NOWARN | GFP_DMA32);
+		vaddr = kzalloc(pool_size, GFP_KERNEL | __GFP_NOWARN);
 		if (!vaddr)
 			num_units /= 2;
 	}
@@ -4707,6 +4713,13 @@ static void ath10k_wmi_event_service_ready_work(struct work_struct *work)
 
 	ath10k_dbg_dump(ar, ATH10K_DBG_WMI, NULL, "wmi svc: ",
 			arg.service_map, arg.service_map_len);
+
+	// RX Sw Crypt mode, which uses raw receive and disables some HW rx logic,
+	// appears to break receiving MU-MIMO properly, so tweak that here.
+	if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+		     ar->running_fw->fw_file.fw_features) &&
+	    ar->request_nohwcrypt)
+		ar->vht_cap_info &= ~IEEE80211_VHT_CAP_MU_BEAMFORMEE_CAPABLE;
 
 	if (ar->num_rf_chains > ar->max_spatial_stream) {
 		ath10k_warn(ar, "hardware advertises support for more spatial streams than it should (%d > %d)\n",
@@ -5688,7 +5701,7 @@ static struct sk_buff *ath10k_wmi_10_1_op_gen_init(struct ath10k *ar)
 		     ar->running_fw->fw_file.fw_features)) {
 		if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
 			     ar->running_fw->fw_file.fw_features) &&
-		    ath10k_modparam_nohwcrypt) {
+		    ar->request_nohwcrypt) {
 			/* This will disable rx decryption in hardware, enable raw
 			 * rx mode, and native-wifi tx mode.  Requires 'CT' firmware.
 			 */
@@ -5800,7 +5813,7 @@ static struct sk_buff *ath10k_wmi_10_2_op_gen_init(struct ath10k *ar)
 		     ar->running_fw->fw_file.fw_features)) {
 		if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
 			     ar->running_fw->fw_file.fw_features) &&
-		    ath10k_modparam_nohwcrypt) {
+		    ar->request_nohwcrypt) {
 			/* This will disable rx decryption in hardware, enable raw
 			 * rx mode, and native-wifi tx mode.  Requires 'CT' firmware.
 			 */
@@ -5929,7 +5942,7 @@ static struct sk_buff *ath10k_wmi_10_4_op_gen_init(struct ath10k *ar)
 #endif
 		if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
 			     ar->running_fw->fw_file.fw_features) &&
-		    ath10k_modparam_nohwcrypt) {
+		    ar->request_nohwcrypt) {
 			/* This will disable rx decryption in hardware, enable raw
 			 * rx mode, and native-wifi tx mode.  Requires 'CT' firmware.
 			 */

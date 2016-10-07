@@ -113,4 +113,6 @@ static inline void ath10k_tx_h_seq_no(struct ieee80211_vif *vif,
 	}
 }
 
+int ath10k_mac_set_pdev_kickout(struct ath10k *ar);
+
 #endif /* _MAC_H_ */

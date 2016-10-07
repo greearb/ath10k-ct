@@ -367,12 +367,37 @@ static ssize_t ath10k_read_fwinfo(struct file *file,
 
 	mutex_lock(&ar->conf_mutex);
 
-	if (len > buf_len)
-		len = buf_len;
-
-	len = snprintf(buf, 1000, "directory: %s\nfirmware:  %s\nfwcfg: fwcfg-%s-%s.txt\n",
+	len = snprintf(buf, buf_len, "directory: %s\nfirmware:  %s\nfwcfg:     fwcfg-%s-%s.txt\nbus:       %s\nfeatures:  ",
 		       ar->hw_params.fw.dir, ar->running_fw->fw_file.fw_name,
-		       ath10k_bus_str(ar->hif.bus), dev_name(ar->dev));
+		       ath10k_bus_str(ar->hif.bus), dev_name(ar->dev), dev_name(ar->dev));
+	ath10k_core_get_fw_features_str(ar, buf + len, buf_len - len);
+
+	/* Just to be safe */
+	buf[buf_len - 1] = 0;
+	len = strlen(buf);
+
+	len += snprintf(buf + len, buf_len - len, "\nversion:   %s\nhw_rev:    ",
+			ar->hw->wiphy->fw_version);
+	switch (ar->hw_rev) {
+	case ATH10K_HW_QCA988X:
+		len += snprintf(buf + len, buf_len - len, "988x\n");
+		break;
+	case ATH10K_HW_QCA6174:
+		len += snprintf(buf + len, buf_len - len, "6174\n");
+		break;
+	case ATH10K_HW_QCA99X0:
+		len += snprintf(buf + len, buf_len - len, "99x0\n");
+		break;
+	case ATH10K_HW_QCA9984:
+		len += snprintf(buf + len, buf_len - len, "9984\n");
+		break;
+	case ATH10K_HW_QCA9377:
+		len += snprintf(buf + len, buf_len - len, "9377\n");
+		break;
+	case ATH10K_HW_QCA4019:
+		len += snprintf(buf + len, buf_len - len, "4019\n");
+		break;
+	}
 
 	ret_cnt = simple_read_from_buffer(user_buf, count, ppos, buf, len);
 
@@ -2946,11 +2971,24 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		ar->eeprom_overrides.rifs_enable_override = val;
 		ath10k_warn(ar, "Setting RIFS enable override to 0x%x\n", val);
 	}
-	/* Below here are local driver hacks, and not passed directly to firmware. */
+	else if (id == SET_SPECIAL_ID_WMI_WD) {
+		ar->eeprom_overrides.wmi_wd_keepalive_ms = val;
+		ath10k_warn(ar, "Setting WMI WD to 0x%x\n", val);
+		if (val == 0)
+			goto unlock; /* 0 means don't set */
+
+		if (val == 0xFFFFFFFF)
+			val = 0; /* 0xFFFFFFFF means disable, FW uses 0 to mean disable */
+	}
+	/* Below here are local driver hacks, and not necessarily passed directly to firmware. */
 	else if (id == 0x1001) {
 		/* Set station failed-transmit kickout threshold. */
 		ar->sta_xretry_kickout_thresh = val;
-		ath10k_warn(ar, "Setting ar sta-xretry-kickout-thresh to 0x%x\n", val);
+
+		ath10k_warn(ar, "Setting pdev sta-xretry-kickout-thresh to 0x%x\n",
+			    val);
+
+		ath10k_mac_set_pdev_kickout(ar);
 		goto unlock;
 	}
 	/* else, pass it through to firmware...but will not be stored locally, so
@@ -2991,6 +3029,7 @@ static ssize_t ath10k_read_ct_special(struct file *file,
 		"id: 8 STA-TX-BW-MASK,  0:  all, 0x1: 20Mhz, 0x2 40Mhz, 0x4 80Mhz \n"
 		"id: 9 pdev failed retry threshold, U16, 10.1 firmware default is 0x40\n"
 		"id: 0xA Enable(1)/Disable(0) baseband RIFS.  Default is disabled.\n"
+		"id: 0xB WMI WD Keepalive(ms): 0xFFFFFFFF disables, otherwise suggest 8000+.\n"
 		"\nBelow here are not actually sent to firmware directly, but configure the driver.\n"
 		"id: 0x1001 set sta-kickout threshold due to tx-failures (0 means disable.  Default is 20 * 16.)\n"
 		"\n";

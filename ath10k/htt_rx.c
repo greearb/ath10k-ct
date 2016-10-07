@@ -707,6 +707,10 @@ static void ath10k_htt_rx_h_rates(struct ath10k *ar,
 		/* 80MHZ */
 		case 2:
 			status->vht_flag |= RX_VHT_FLAG_80MHZ;
+			break;
+		case 3:
+			status->vht_flag |= RX_VHT_FLAG_160MHZ;
+			break;
 		}
 
 		status->flag |= RX_FLAG_VHT;
@@ -931,7 +935,7 @@ static void ath10k_process_rx(struct ath10k *ar,
 	*status = *rx_status;
 
 	ath10k_dbg(ar, ATH10K_DBG_DATA,
-		   "rx skb %p len %u peer %pM %s %s sn %u %s%s%s%s%s %srate_idx %u vht_nss %u freq %u band %u flag 0x%llx fcs-err %i mic-err %i amsdu-more %i\n",
+		   "rx skb %p len %u peer %pM %s %s sn %u %s%s%s%s%s%s %srate_idx %u vht_nss %u freq %u band %u flag 0x%llx fcs-err %i mic-err %i amsdu-more %i\n",
 		   skb,
 		   skb->len,
 		   ieee80211_get_SA(hdr),
@@ -944,6 +948,7 @@ static void ath10k_process_rx(struct ath10k *ar,
 		   status->flag & RX_FLAG_VHT ? "vht" : "",
 		   status->flag & RX_FLAG_40MHZ ? "40" : "",
 		   status->vht_flag & RX_VHT_FLAG_80MHZ ? "80" : "",
+		   status->vht_flag & RX_VHT_FLAG_160MHZ ? "160" : "",
 		   status->flag & RX_FLAG_SHORT_GI ? "sgi " : "",
 		   status->rate_idx,
 		   status->vht_nss,
@@ -1007,6 +1012,12 @@ static void ath10k_htt_rx_h_undecap_raw(struct ath10k *ar,
 
 	/* This probably shouldn't happen but warn just in case */
 	if (unlikely(WARN_ON_ONCE(!(is_first && is_last))))
+		return;
+
+	/* We see zero length msdus, not sure why.  At least don't
+	 * try to trim it further.
+	 */
+	if (unlikely(msdu->len < 4))
 		return;
 
 	skb_trim(msdu, msdu->len - FCS_LEN);

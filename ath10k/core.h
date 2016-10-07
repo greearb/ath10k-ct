@@ -758,6 +758,7 @@ enum ath10k_tx_pause_reason {
 struct ath10k_fw_file {
 	const struct firmware *firmware;
 	char fw_name[100];
+	char fw_board_name[100];
 
 	char fw_version[ETHTOOL_FWVERS_LEN];
 
@@ -1116,6 +1117,11 @@ struct ath10k {
 		bool rifs_enable_override;
 		u16 max_txpower;
 		u16 pdev_xretry_th; /* Max failed retries before wifi chip is reset, 10.1 firmware default is 0x40 */
+		u32 wmi_wd_keepalive_ms; /* 0xFFFFFFFF means disable, otherwise, FW will assert after X ms of not receiving
+					  * a NOP keepalive from the driver.  Suggested value is 0xFFFFFFFF, or 8000+.
+					  * 0 means use whatever firmware defaults to (probably 8000).
+					  * Units are actually 1/1024 of a second, but pretty close to ms, at least.
+					  */
 	} eeprom_overrides;
 
 	/* must be last */
