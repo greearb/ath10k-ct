@@ -379,6 +379,9 @@ static ssize_t ath10k_read_fwinfo(struct file *file,
 	len += snprintf(buf + len, buf_len - len, "\nversion:   %s\nhw_rev:    ",
 			ar->hw->wiphy->fw_version);
 	switch (ar->hw_rev) {
+	case ATH10K_HW_QCA9887:
+		len += snprintf(buf + len, buf_len - len, "9887\n");
+		break;
 	case ATH10K_HW_QCA988X:
 		len += snprintf(buf + len, buf_len - len, "988x\n");
 		break;

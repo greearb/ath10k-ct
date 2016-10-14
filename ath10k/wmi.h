@@ -1261,6 +1261,52 @@ enum wmi_10x_cmd_id {
 	WMI_10X_GPIO_CONFIG_CMDID,
 	WMI_10X_GPIO_OUTPUT_CMDID,
 
+	/* CT Firmware only, trying to add new WMI features w/out breaking backwards compat. */
+	/* add new CMDIDs here (out-of-order backport from 10.2) */
+	/**update a wds  (4 address ) entry. */
+	WMI_10X_PEER_UPDATE_WDS_ENTRY_CMDID,
+	/** request to start/stop keep-alive frame */
+	WMI_10X_RTT_KEEPALIVE_CMDID,
+	WMI_10X_VDEV_RATEMASK_CMDID,
+ 
+	/** Enable/Disable Smart Antenna */
+	WMI_10X_PDEV_SMART_ANT_ENABLE_CMDID,
+	/** Set Smart Antenna RX antenna*/
+	WMI_10X_PDEV_SMART_ANT_SET_RX_ANTENNA_CMDID,
+	/** Set Smart Antenna TX antenna*/
+	WMI_10X_PEER_SMART_ANT_SET_TX_ANTENNA_CMDID,
+	/** Set Smart Antenna TX train info */
+	WMI_10X_PEER_SMART_ANT_SET_TRAIN_INFO_CMDID,
+	/** Set SA node config options */
+	WMI_10X_PEER_SMART_ANT_SET_NODE_CONFIG_OPS_CMDID,
+	/* For fw recovery test command */
+	WMI_10X_FORCE_FW_HANG_CMDID,
+
+	/** Override the antenna switch table */
+	WMI_10X_PDEV_SET_ANTENNA_SWITCH_TABLE_CMDID,
+	/** Override the CTL table */
+	WMI_10X_PDEV_SET_CTL_TABLE_CMDID,
+	/** Override the array gain table */
+	WMI_10X_PDEV_SET_MIMOGAIN_TABLE_CMDID,
+	/** Set/Get the rate power table in OTP */
+	WMI_10X_PDEV_RATEPWR_TABLE_CMDID,
+	/** En/disable the rate power and chain mask table in FW*/
+	WMI_10X_PDEV_RATEPWR_CHAINMSK_TABLE_CMDID,
+	
+	WMI_10X_PDEV_GET_INFO,
+	WMI_10X_VDEV_GET_INFO,
+	/** ATF VDEV REQUEST commands. */
+	WMI_10X_VDEV_ATF_REQUEST_CMDID,
+	/** ATF PEER REQUEST commands. */
+	WMI_10X_PEER_ATF_REQUEST_CMDID,
+
+	/** Get Thermal management params **/
+	WMI_10X_PDEV_GET_TEMPERATURE_CMDID,
+	WMI_10X_MU_CAL_START_CMDID,
+	WMI_10X_SET_LTEU_CONFIG_CMDID,
+	WMI_10X_SET_CCA_PARAMS_CMDID,
+	WMI_10X_PDEV_BSS_CHAN_INFO_REQUEST,
+
 	WMI_PDEV_SET_SPECIAL_CMDID = WMI_10X_END_CMDID - 101, /* CT only:  special hack (cts/slot/cifs/ack timers, etc) */
 	WMI_NOP = WMI_10X_END_CMDID - 100, /* CT only:  wmi transport keep-alive, basically */
 

@@ -19,6 +19,7 @@
 #include <linux/firmware.h>
 #include <linux/of.h>
 #include <linux/ctype.h>
+#include <asm/byteorder.h>
 
 #include "core.h"
 #include "mac.h"
@@ -72,6 +73,25 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 			.board = QCA988X_HW_2_0_BOARD_DATA_FILE,
 			.board_size = QCA988X_BOARD_DATA_SZ,
 			.board_ext_size = QCA988X_BOARD_EXT_DATA_SZ,
+		},
+	},
+	{
+		.id = QCA9887_HW_1_0_VERSION,
+		.dev_id = QCA9887_1_0_DEVICE_ID,
+		.name = "qca9887 hw1.0",
+		.patch_load_addr = QCA9887_HW_1_0_PATCH_LOAD_ADDR,
+		.uart_pin = 7,
+		.has_shifted_cc_wraparound = true,
+		.otp_exe_param = 0,
+		.channel_counters_freq_hz = 88000,
+		.max_probe_resp_desc_thres = 0,
+		.hw_4addr_pad = ATH10K_HW_4ADDR_PAD_AFTER,
+		.cal_data_len = 2116,
+		.fw = {
+			.dir = QCA9887_HW_1_0_FW_DIR,
+			.board = QCA9887_HW_1_0_BOARD_DATA_FILE,
+			.board_size = QCA9887_BOARD_DATA_SZ,
+			.board_ext_size = QCA9887_BOARD_EXT_DATA_SZ,
 		},
 	},
 	{
@@ -586,6 +606,35 @@ out_free:
 	kfree(data);
 
 out:
+	return ret;
+}
+
+static int ath10k_download_cal_eeprom(struct ath10k *ar)
+{
+	size_t data_len;
+	void *data = NULL;
+	int ret;
+
+	ret = ath10k_hif_fetch_cal_eeprom(ar, &data, &data_len);
+	if (ret) {
+		if (ret != -EOPNOTSUPP)
+			ath10k_warn(ar, "failed to read calibration data from EEPROM: %d\n",
+				    ret);
+		goto out_free;
+	}
+
+	ret = ath10k_download_board_data(ar, data, data_len);
+	if (ret) {
+		ath10k_warn(ar, "failed to download calibration data from EEPROM: %d\n",
+			    ret);
+		goto out_free;
+	}
+
+	ret = 0;
+
+out_free:
+	kfree(data);
+
 	return ret;
 }
 
@@ -1652,7 +1701,17 @@ static int ath10k_download_cal_data(struct ath10k *ar)
 	}
 
 	ath10k_dbg(ar, ATH10K_DBG_BOOT,
-		   "boot did not find DT entry, try OTP next: %d\n",
+		   "boot did not find DT entry, try target EEPROM next: %d\n",
+		   ret);
+
+	ret = ath10k_download_cal_eeprom(ar);
+	if (ret == 0) {
+		ar->cal_mode = ATH10K_CAL_MODE_EEPROM;
+		goto done;
+	}
+
+	ath10k_dbg(ar, ATH10K_DBG_BOOT,
+		   "boot did not find target EEPROM entry, try OTP next: %d\n",
 		   ret);
 
 	ret = ath10k_download_and_run_otp(ar);
@@ -2613,6 +2672,7 @@ struct ath10k *ath10k_core_create(size_t priv_size, struct device *dev,
 
 	switch (hw_rev) {
 	case ATH10K_HW_QCA988X:
+	case ATH10K_HW_QCA9887:
 		ar->regs = &qca988x_regs;
 		ar->hw_values = &qca988x_values;
 		break;
