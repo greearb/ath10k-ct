@@ -385,6 +385,9 @@ static ssize_t ath10k_read_fwinfo(struct file *file,
 	case ATH10K_HW_QCA988X:
 		len += snprintf(buf + len, buf_len - len, "988x\n");
 		break;
+	case ATH10K_HW_QCA9888:
+		len += snprintf(buf + len, buf_len - len, "9888\n");
+		break;
 	case ATH10K_HW_QCA6174:
 		len += snprintf(buf + len, buf_len - len, "6174\n");
 		break;

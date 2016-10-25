@@ -1268,7 +1268,7 @@ enum wmi_10x_cmd_id {
 	/** request to start/stop keep-alive frame */
 	WMI_10X_RTT_KEEPALIVE_CMDID,
 	WMI_10X_VDEV_RATEMASK_CMDID,
- 
+
 	/** Enable/Disable Smart Antenna */
 	WMI_10X_PDEV_SMART_ANT_ENABLE_CMDID,
 	/** Set Smart Antenna RX antenna*/
@@ -1292,7 +1292,7 @@ enum wmi_10x_cmd_id {
 	WMI_10X_PDEV_RATEPWR_TABLE_CMDID,
 	/** En/disable the rate power and chain mask table in FW*/
 	WMI_10X_PDEV_RATEPWR_CHAINMSK_TABLE_CMDID,
-	
+
 	WMI_10X_PDEV_GET_INFO,
 	WMI_10X_VDEV_GET_INFO,
 	/** ATF VDEV REQUEST commands. */
