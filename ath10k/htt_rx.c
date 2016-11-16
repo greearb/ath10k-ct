@@ -2106,8 +2106,9 @@ static void ath10k_htt_rx_tx_fetch_ind(struct ath10k *ar, struct sk_buff *skb)
 		 */
 
 		if (unlikely(!txq)) {
-			ath10k_warn(ar, "failed to lookup txq for peer_id %hu tid %hhu\n",
-				    peer_id, tid);
+			if (net_ratelimit())
+				ath10k_warn(ar, "fetch-ind: failed to lookup txq for peer_id %hu tid %hhu\n",
+					    peer_id, tid);
 			continue;
 		}
 
@@ -2263,8 +2264,9 @@ static void ath10k_htt_rx_tx_mode_switch_ind(struct ath10k *ar,
 		 */
 
 		if (unlikely(!txq)) {
-			ath10k_warn(ar, "failed to lookup txq for peer_id %hu tid %hhu\n",
-				    peer_id, tid);
+			if (net_ratelimit())
+				ath10k_warn(ar, "mode-switch: failed to lookup txq for peer_id %hu tid %hhu\n",
+					    peer_id, tid);
 			continue;
 		}
 

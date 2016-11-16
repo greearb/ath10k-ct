@@ -2810,7 +2810,7 @@ static bool ath10k_mac_sta_has_ofdm_only(struct ieee80211_vif *vif,
 	u32 msk = arvif->bitrate_mask.control[NL80211_BAND_2GHZ].legacy &
 		sta->supp_rates[NL80211_BAND_2GHZ];
 	/* We have 12 bits of legacy rates, first 4 are /b (CCK) rates. */
-	return (msk & 0xfff) == 0xff0;
+	return (msk & 0xff0) && !(msk & 0xf);
 }
 
 static bool ath10k_mac_sta_has_ofdm_and_cck(struct ieee80211_vif *vif,
@@ -2820,7 +2820,7 @@ static bool ath10k_mac_sta_has_ofdm_and_cck(struct ieee80211_vif *vif,
 	u32 msk = arvif->bitrate_mask.control[NL80211_BAND_2GHZ].legacy &
 		sta->supp_rates[NL80211_BAND_2GHZ];
 	/* We have 12 bits of legacy rates, first 4 are /b (CCK) rates. */
-	return (msk & 0xfff) == 0xfff;
+	return ((msk & 0xf) && (msk & 0xff0));
 }
 
 static void ath10k_peer_assoc_h_phymode(struct ath10k *ar,
@@ -4338,8 +4338,8 @@ void ath10k_mac_tx_push_pending(struct ath10k *ar)
 	int max;
 	int loop_max = 2000;
 
-	rcu_read_lock();
 	spin_lock_bh(&ar->txqs_lock);
+	rcu_read_lock();
 
 	last = list_last_entry(&ar->txqs, struct ath10k_txq, list);
 	while (!list_empty(&ar->txqs)) {
@@ -4373,8 +4373,8 @@ void ath10k_mac_tx_push_pending(struct ath10k *ar)
 			break;
 	}
 
-	spin_unlock_bh(&ar->txqs_lock);
 	rcu_read_unlock();
+	spin_unlock_bh(&ar->txqs_lock);
 }
 
 /************/
@@ -4860,6 +4860,9 @@ static void ath10k_mac_setup_ht_vht_cap(struct ath10k *ar)
 	if (ar->phy_capability & WHAL_WLAN_11G_CAPABILITY) {
 		band = &ar->mac.sbands[NL80211_BAND_2GHZ];
 		band->ht_cap = ht_cap;
+
+		/* Enable the VHT support at 2.4 GHz */
+		band->vht_cap = vht_cap;
 	}
 	if (ar->phy_capability & WHAL_WLAN_11A_CAPABILITY) {
 		band = &ar->mac.sbands[NL80211_BAND_5GHZ];

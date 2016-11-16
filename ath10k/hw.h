@@ -406,6 +406,9 @@ enum ath10k_hw_4addr_pad {
 /* Over-rides for Candela Technologies firmware */
 #define DEF_TARGET_10X_NUM_VDEVS_CT		16 /* Can support up to 64 with proper config of other settings.
 						    * override w/module parm or fwcfg file */
+/* NOTE:  AST can really hold 4 keys, and there can be some temporarily in use as well.  So this
+ * needs to be pretty large.  256 works in my testing with 64 station vdevs. --Ben
+ */
 #define TARGET_10X_AST_SKID_LIMIT_CT		(ath10k_modparam_target_num_peers_ct * TARGET_10X_NUM_PEER_AST)
 #define TARGET_10X_NUM_PEER_KEYS_CT             (WMI_MAX_KEY_INDEX + 1) /* 4 */
 
