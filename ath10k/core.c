@@ -2006,10 +2006,12 @@ static int ath10k_core_init_firmware_features(struct ath10k *ar)
 		ar->fw_stats_req_mask = WMI_STAT_PDEV | WMI_STAT_VDEV |
 			WMI_STAT_PEER;
 		ar->max_spatial_stream = WMI_MAX_SPATIAL_STREAM;
+		ar->num_tids = TARGET_NUM_TIDS;
 		break;
 	case ATH10K_FW_WMI_OP_VERSION_10_1:
 		ar->bmiss_offload_max_vdev = TARGET_10X_BMISS_OFFLOAD_MAX_VDEV;
 		ar->skid_limit = TARGET_10X_AST_SKID_LIMIT;
+		ar->num_tids = TARGET_10X_NUM_TIDS;
 		if (test_bit(ATH10K_FW_FEATURE_WMI_10X_CT,
 			     fw_file->fw_features)) {
 			ar->skid_limit = TARGET_10X_AST_SKID_LIMIT_CT;
@@ -2031,9 +2033,11 @@ static int ath10k_core_init_firmware_features(struct ath10k *ar)
 		if (ath10k_peer_stats_enabled(ar)) {
 			ar->max_num_peers = TARGET_10X_TX_STATS_NUM_PEERS;
 			ar->max_num_stations = TARGET_10X_TX_STATS_NUM_STATIONS;
+			ar->num_tids = TARGET_10X_TX_STATS_NUM_TIDS;
 		} else {
 			ar->max_num_peers = TARGET_10X_NUM_PEERS;
 			ar->max_num_stations = TARGET_10X_NUM_STATIONS;
+			ar->num_tids = TARGET_10X_NUM_TIDS;
 		}
 		ar->bmiss_offload_max_vdev = TARGET_10X_BMISS_OFFLOAD_MAX_VDEV;
 		ar->skid_limit = TARGET_10X_AST_SKID_LIMIT;

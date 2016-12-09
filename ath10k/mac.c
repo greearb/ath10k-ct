@@ -4190,12 +4190,36 @@ void ath10k_mgmt_over_wmi_tx_work(struct work_struct *work)
 	}
 }
 
-static void ath10k_mac_txq_init(struct ieee80211_txq *txq)
+static void ath10k_mac_txq_init(struct ath10k *ar, struct ieee80211_txq *txq)
 {
 	struct ath10k_txq *artxq = (void *)txq->drv_priv;
+	struct ath10k_txq *tmp, *walker;
+	struct ieee80211_txq *txq_tmp;
+	int i = 0;
 
 	if (!txq)
 		return;
+
+	spin_lock_bh(&ar->txqs_lock);
+
+	/* Remove from ar->txqs in case it still exists there. */
+	list_for_each_entry_safe(walker, tmp, &ar->txqs, list) {
+		txq_tmp = container_of((void *)walker, struct ieee80211_txq,
+				       drv_priv);
+		if ((++i % 10000) == 0) {
+			ath10k_err(ar, "txq-init: Checking txq_tmp: %p i: %d\n", txq_tmp, i);
+			ath10k_err(ar, "txq-init: txqs: %p walker->list: %p w->next: %p  w->prev: %p ar->txqs: %p\n",
+				   &ar->txqs, &(walker->list), walker->list.next, walker->list.prev, &ar->txqs);
+		}
+
+		if (txq_tmp == txq) {
+			WARN_ON_ONCE(1);
+			ath10k_err(ar, "txq-init: Found txq when it should be deleted, txq_tmp: %p  txq: %p\n",
+				   txq_tmp, txq);
+			list_del(&walker->list);
+		}
+	}
+	spin_unlock_bh(&ar->txqs_lock);
 
 	INIT_LIST_HEAD(&artxq->list);
 }
@@ -4208,6 +4232,7 @@ static void ath10k_mac_txq_unref(struct ath10k *ar, struct ieee80211_txq *txq)
 	struct sk_buff *msdu;
 	struct ieee80211_txq *txq_tmp;
 	int msdu_id;
+	int i = 0;
 
 	if (!txq)
 		return;
@@ -4220,8 +4245,18 @@ static void ath10k_mac_txq_unref(struct ath10k *ar, struct ieee80211_txq *txq)
 	list_for_each_entry_safe(walker, tmp, &ar->txqs, list) {
 		txq_tmp = container_of((void *)walker, struct ieee80211_txq,
 				       drv_priv);
-		if (txq_tmp == txq)
+		if ((++i % 10000) == 0) {
+			ath10k_err(ar, "Checking txq_tmp: %p i: %d\n", txq_tmp, i);
+			ath10k_err(ar, "txqs: %p walker->list: %p w->next: %p  w->prev: %p ar->txqs: %p\n",
+				   &ar->txqs, &(walker->list), walker->list.next, walker->list.prev, &ar->txqs);
+		}
+
+		if (txq_tmp == txq) {
+			WARN_ON_ONCE(1);
+			ath10k_err(ar, "Found txq when it should be deleted, txq_tmp: %p  txq: %p\n",
+				   txq_tmp, txq);
 			list_del(&walker->list);
+		}
 	}
 	spin_unlock_bh(&ar->txqs_lock);
 
@@ -5255,7 +5290,7 @@ static int ath10k_add_interface(struct ieee80211_hw *hw,
 	mutex_lock(&ar->conf_mutex);
 
 	memset(arvif, 0, sizeof(*arvif));
-	ath10k_mac_txq_init(vif->txq);
+	ath10k_mac_txq_init(ar, vif->txq);
 
 	memset(&arvif->bcast_rate, WMI_FIXED_RATE_NONE, sizeof(arvif->bcast_rate));
 	memset(&arvif->mcast_rate, WMI_FIXED_RATE_NONE, sizeof(arvif->mcast_rate));
@@ -5620,8 +5655,9 @@ static void ath10k_remove_interface(struct ieee80211_hw *hw,
 		kfree(arvif->u.ap.noa_data);
 	}
 
-	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac vdev %i delete (remove interface)\n",
-		   arvif->vdev_id);
+	ath10k_dbg(ar, ATH10K_DBG_MAC,
+		   "mac vdev %i delete (remove interface), vif: %p  arvif: %p\n",
+		   arvif->vdev_id, vif, arvif);
 
 	ret = ath10k_wmi_vdev_delete(ar, arvif->vdev_id);
 	if (ret)
@@ -6437,7 +6473,7 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 		INIT_WORK(&arsta->update_wk, ath10k_sta_rc_update_wk);
 
 		for (i = 0; i < ARRAY_SIZE(sta->txq); i++)
-			ath10k_mac_txq_init(sta->txq[i]);
+			ath10k_mac_txq_init(ar, sta->txq[i]);
 	}
 
 	/* cancel must be done outside the mutex to avoid deadlock */

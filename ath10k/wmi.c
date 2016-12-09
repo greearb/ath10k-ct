@@ -1771,6 +1771,15 @@ static void ath10k_wmi_tx_beacon_nowait(struct ath10k_vif *arvif)
 	bool deliver_cab;
 	int ret;
 
+	/* I saw a kasan warning here, looks like arvif and/or ar might have been
+	 * NULL, add something to catch this if it happens again.
+	 */
+	if ((((unsigned long)(arvif)) < 8000) || (((unsigned long)(ar)) < 8000)) {
+		pr_err("tx-beacon-nowait:  arvif: %p  ar: %p\n", arvif, ar);
+		BUG_ON(((unsigned long)(arvif)) < 8000);
+		BUG_ON(((unsigned long)(ar)) < 8000);
+	}
+
 	spin_lock_bh(&ar->data_lock);
 
 	bcn = arvif->beacon;
@@ -5686,6 +5695,10 @@ static struct sk_buff *ath10k_wmi_10_1_op_gen_init(struct ath10k *ar)
 	config.rx_decap_mode = __cpu_to_le32(ar->wmi.rx_decap_mode);
 	config.num_vdevs = __cpu_to_le32(ar->max_num_vdevs);
 	config.num_peers = __cpu_to_le32(ar->max_num_peers);
+
+	ath10k_warn(ar, "10.1 wmi init: vdevs: %d  peers: %d  tid: %d\n",
+		    ar->max_num_vdevs, ar->max_num_peers, ar->num_tids);
+
 	config.tx_chain_mask = __cpu_to_le32(TARGET_10X_TX_CHAIN_MASK);
 
 	config.roam_offload_max_vdev =
@@ -5736,7 +5749,7 @@ static struct sk_buff *ath10k_wmi_10_1_op_gen_init(struct ath10k *ar)
 			   ar->htt.max_num_pending_tx);
 	}
 
-	config.num_tids = __cpu_to_le32(TARGET_10X_NUM_TIDS);
+	config.num_tids = __cpu_to_le32(ar->num_tids);
 	config.rx_chain_mask = __cpu_to_le32(TARGET_10X_RX_CHAIN_MASK);
 	config.rx_timeout_pri_vo = __cpu_to_le32(TARGET_10X_RX_TIMEOUT_LO_PRI);
 	config.rx_timeout_pri_vi = __cpu_to_le32(TARGET_10X_RX_TIMEOUT_LO_PRI);
@@ -5801,11 +5814,10 @@ static struct sk_buff *ath10k_wmi_10_2_op_gen_init(struct ath10k *ar)
 
 	if (ath10k_peer_stats_enabled(ar)) {
 		config.num_peers = __cpu_to_le32(TARGET_10X_TX_STATS_NUM_PEERS);
-		config.num_tids = __cpu_to_le32(TARGET_10X_TX_STATS_NUM_TIDS);
 	} else {
 		config.num_peers = __cpu_to_le32(TARGET_10X_NUM_PEERS);
-		config.num_tids = __cpu_to_le32(TARGET_10X_NUM_TIDS);
 	}
+	config.num_tids = __cpu_to_le32(ar->num_tids);
 
 	config.tx_chain_mask = __cpu_to_le32(TARGET_10X_TX_CHAIN_MASK);
 
@@ -8460,7 +8472,7 @@ void ath10k_wmi_free_host_mem(struct ath10k *ar)
 		dma_unmap_single(ar->dev,
 				 ar->wmi.mem_chunks[i].paddr,
 				 ar->wmi.mem_chunks[i].len,
-				 DMA_TO_DEVICE);
+				 DMA_BIDIRECTIONAL);
 		kfree(ar->wmi.mem_chunks[i].vaddr);
 	}
 
