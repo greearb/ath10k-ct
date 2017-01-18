@@ -65,6 +65,18 @@
 #define ATH10K_KEEPALIVE_MAX_IDLE 3895
 #define ATH10K_KEEPALIVE_MAX_UNRESPONSIVE 3900
 
+/* Backports related crap */
+#ifdef STANDALONE_CT
+#ifndef NUM_NL80211_BANDS
+/* So, maybe 4.4 era or so...  This will give compile warnings,
+ * but it should work fine.
+ */
+#define NUM_NL80211_BANDS IEEE80211_NUM_BANDS
+#define CT_PRE_NUM_NL80211_BANDS
+#endif
+#endif
+
+
 struct ath10k;
 
 enum ath10k_bus {
@@ -330,6 +342,7 @@ struct ath10k_peer {
 	struct ieee80211_vif *vif;
 	struct ieee80211_sta *sta;
 
+	bool removed;
 	int vdev_id;
 	u8 addr[ETH_ALEN];
 	DECLARE_BITMAP(peer_ids, ATH10K_MAX_NUM_PEER_IDS);

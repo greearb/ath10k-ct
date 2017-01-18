@@ -4287,6 +4287,9 @@ struct ieee80211_txq *ath10k_mac_txq_lookup(struct ath10k *ar,
 	if (!peer)
 		return NULL;
 
+	if (peer->removed)
+		return NULL;
+
 	if (peer->sta)
 		return peer->sta->txq[tid];
 	else if (peer->vif)
@@ -4432,7 +4435,7 @@ void __ath10k_scan_finish(struct ath10k *ar)
 	case ATH10K_SCAN_RUNNING:
 	case ATH10K_SCAN_ABORTING:
 		if (!ar->scan.is_roc) {
-#ifdef STANDALONE_CT
+#if defined STANDALONE_CT && ! defined CT_PRE_NUM_NL80211_BANDS
 			/* LEDE is using latest backports now, needs this new logic. */
 			struct cfg80211_scan_info info = {
 				.aborted = (ar->scan.state ==
@@ -6459,24 +6462,6 @@ static int ath10k_mac_tdls_vifs_count(struct ieee80211_hw *hw)
 	return num_tdls_vifs;
 }
 
-static void ath10k_sta_pre_rcu_remove(struct ieee80211_hw *hw,
-				      struct ieee80211_vif *vif,
-				      struct ieee80211_sta *sta)
-{
-	struct ath10k *ar = hw->priv;
-	struct ath10k_sta *arsta = (struct ath10k_sta *)sta->drv_priv;
-	int i;
-
-	cancel_work_sync(&arsta->update_wk);
-
-	mutex_lock(&ar->conf_mutex);
-
-	for (i = 0; i < ARRAY_SIZE(sta->txq); i++)
-		ath10k_mac_txq_unref(ar, sta->txq[i]);
-
-	mutex_unlock(&ar->conf_mutex);
-}
-
 static int ath10k_sta_state(struct ieee80211_hw *hw,
 			    struct ieee80211_vif *vif,
 			    struct ieee80211_sta *sta,
@@ -6642,6 +6627,9 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 			}
 		}
 		spin_unlock_bh(&ar->data_lock);
+
+		for (i = 0; i < ARRAY_SIZE(sta->txq); i++)
+			ath10k_mac_txq_unref(ar, sta->txq[i]);
 
 		if (!sta->tdls)
 			goto exit;
@@ -8111,6 +8099,20 @@ ath10k_mac_op_switch_vif_chanctx(struct ieee80211_hw *hw,
 	return 0;
 }
 
+static void ath10k_mac_op_sta_pre_rcu_remove(struct ieee80211_hw *hw,
+					     struct ieee80211_vif *vif,
+					     struct ieee80211_sta *sta)
+{
+	struct ath10k *ar;
+	struct ath10k_peer *peer;
+
+	ar = hw->priv;
+
+	list_for_each_entry(peer, &ar->peers, list)
+		if (peer->sta == sta)
+			peer->removed = true;
+}
+
 static const struct ieee80211_ops ath10k_ops = {
 	.tx				= ath10k_mac_op_tx,
 	.wake_tx_queue			= ath10k_mac_op_wake_tx_queue,
@@ -8125,7 +8127,6 @@ static const struct ieee80211_ops ath10k_ops = {
 	.cancel_hw_scan			= ath10k_cancel_hw_scan,
 	.set_key			= ath10k_set_key,
 	.set_default_unicast_key        = ath10k_set_default_unicast_key,
-	.sta_pre_rcu_remove             = ath10k_sta_pre_rcu_remove,
 	.sta_state			= ath10k_sta_state,
 	.conf_tx			= ath10k_conf_tx,
 	.remain_on_channel		= ath10k_remain_on_channel,
@@ -8152,6 +8153,7 @@ static const struct ieee80211_ops ath10k_ops = {
 	.assign_vif_chanctx		= ath10k_mac_op_assign_vif_chanctx,
 	.unassign_vif_chanctx		= ath10k_mac_op_unassign_vif_chanctx,
 	.switch_vif_chanctx		= ath10k_mac_op_switch_vif_chanctx,
+	.sta_pre_rcu_remove		= ath10k_mac_op_sta_pre_rcu_remove,
 
 	CFG80211_TESTMODE_CMD(ath10k_tm_cmd)
 
