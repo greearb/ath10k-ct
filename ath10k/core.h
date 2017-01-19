@@ -66,14 +66,12 @@
 #define ATH10K_KEEPALIVE_MAX_UNRESPONSIVE 3900
 
 /* Backports related crap */
-#ifdef STANDALONE_CT
-#ifndef NUM_NL80211_BANDS
+#ifdef STANDALONE_CT_CHAOS_CALMER
 /* So, maybe 4.4 era or so...  This will give compile warnings,
  * but it should work fine.
  */
 #define NUM_NL80211_BANDS IEEE80211_NUM_BANDS
 #define CT_PRE_NUM_NL80211_BANDS
-#endif
 #endif
 
 
