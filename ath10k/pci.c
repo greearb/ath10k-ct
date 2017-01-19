@@ -3448,7 +3448,8 @@ static int ath10k_pci_probe(struct pci_dev *pdev,
 	int (*pci_soft_reset)(struct ath10k *ar);
 	int (*pci_hard_reset)(struct ath10k *ar);
 
-	printk(KERN_INFO "ath10k driver, optimized for CT firmware, probing pci.\n");
+	printk(KERN_INFO "ath10k driver, optimized for CT firmware, probing pci device: 0x%x.\n",
+	       pci_dev->device);
 
 	switch (pci_dev->device) {
 	case QCA988X_2_0_DEVICE_ID:

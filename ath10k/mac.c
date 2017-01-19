@@ -2278,11 +2278,34 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	int i;
 	int j;
 	int hw_rix;
-	int hw_nss = ar->num_rf_chains;
 
+	/* So, what we really want here is the max number of chains the firmware
+	 * is compiled for.  But, since we can have 3x3 firmware run on 2x2 chips,
+	 * then we need to hack on this in gruesome ways.  Better have the hack here
+	 * than try to extend FW's ability to send that value I think.
+	 */
+	int hw_nss = ar->num_rf_chains;
 	if (! test_bit(ATH10K_FW_FEATURE_CT_RATEMASK,
 		       ar->running_fw->fw_file.fw_features))
 		return;
+
+	/* Ignore devices not known to be supported, this is a minor feature and
+	 * not worth breaking systems for users that don't need it.
+	 */
+	if (!((ar->dev_id == QCA988X_2_0_DEVICE_ID) ||
+	      (ar->dev_id == QCA99X0_2_0_DEVICE_ID) ||
+	      (ar->dev_id == QCA9984_1_0_DEVICE_ID))) {
+		ath10k_warn(ar, "rate-override:  Skipping un-supported device-id, hw-nss: %d dev-id: 0x%x\n",
+			    hw_nss, ar->dev_id);
+		return;
+	}
+
+	if (hw_nss < 3) {
+		/* Maybe 2x2 NIC booting 3x3 988x firmware? */
+		if (ar->dev_id == QCA988X_2_0_DEVICE_ID) {
+			hw_nss = 3;
+		}
+	}
 
 	lockdep_assert_held(&ar->conf_mutex);
 
@@ -2294,8 +2317,8 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	ratemask = arvif->bitrate_mask.control[band].legacy;
 	rates = sband->bitrates;
 
-	ath10k_warn(ar, "band: %d  ratemask: 0x%x  hw-nss: %d\n",
-		    band, ratemask, hw_nss);
+	ath10k_warn(ar, "band: %d  ratemask: 0x%x  hw-nss: %d dev-id: 0x%x\n",
+		    band, ratemask, hw_nss, ar->dev_id);
 
 	arg->has_rate_overrides = true;
 
@@ -2314,9 +2337,9 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 			/* ofdm rates start at rix 4 */
 			hw_rix = rates->hw_value + 4;
 		}
-		//ath10k_dbg(ar, ATH10K_DBG_MAC,
-		//	   "set-enabled, bitrate: %d  i: %d  hw-value: %d hw-rix: %d\n",
-		//	   rates->bitrate, i, rates->hw_value, hw_rix);
+		ath10k_dbg(ar, ATH10K_DBG_MAC2,
+			   "set-enabled, bitrate: %d  i: %d  hw-value: %d hw-rix: %d\n",
+			   rates->bitrate, i, rates->hw_value, hw_rix);
 		ath10k_set_rate_enabled(hw_rix, arg->rate_overrides, 1);
 	}
 
@@ -2327,13 +2350,13 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	 */
 	for (i = 0; i < hw_nss; i++) {
 		unsigned int mcs = arvif->bitrate_mask.control[band].ht_mcs[i];
-		//ath10k_warn(ar, "ht-mcs [%i]: 0x%x\n", i, mcs);
+		ath10k_dbg(ar, ATH10K_DBG_MAC2, "ht-mcs [%i]: 0x%x\n", i, mcs);
 		for (j = 0; j<8; j++) {
 			if (mcs & (1<<j)) {
 				hw_rix = 12 + i * 8 + j;
-				//ath10k_dbg(ar, ATH10K_DBG_MAC,
-				//	   "set-enabled, ht: hw-rix: %d, %d  i: %d j: %d\n",
-				//	   hw_rix, hw_rix + hw_nss * 8, i, j);
+				ath10k_dbg(ar, ATH10K_DBG_MAC2,
+					   "set-enabled, ht: hw-rix: %d, %d  i: %d j: %d\n",
+					   hw_rix, hw_rix + hw_nss * 8, i, j);
 				ath10k_set_rate_enabled(hw_rix, arg->rate_overrides, 1);
 				/* Set HT40 rateset too */
 				ath10k_set_rate_enabled(hw_rix + hw_nss * 8, arg->rate_overrides, 1);
@@ -2350,13 +2373,13 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	 */
 	for (i = 0; i < hw_nss; i++) {
 		unsigned int mcs = arvif->bitrate_mask.control[band].vht_mcs[i];
-		//ath10k_warn(ar, "vht-mcs [%i]: 0x%x\n", i, mcs);
+		ath10k_dbg(ar, ATH10K_DBG_MAC2, "vht-mcs [%i]: 0x%x\n", i, mcs);
 		for (j = 0; j<10; j++) {
 			if (mcs & (1<<j)) {
 				hw_rix = 12 + (hw_nss * 2) * 8 + i * 10 + j;
-				//ath10k_dbg(ar, ATH10K_DBG_MAC,
-				//	   "set-enabled, vht: hw-rix: %d, %d, %d  i: %d j: %d\n",
-				//	   hw_rix, hw_rix + hw_nss * 10, hw_rix + hw_nss * 2 * 10, i, j);
+				ath10k_dbg(ar, ATH10K_DBG_MAC2,
+					   "set-enabled, vht: hw-rix: %d, %d, %d  i: %d j: %d\n",
+					   hw_rix, hw_rix + hw_nss * 10, hw_rix + hw_nss * 2 * 10, i, j);
 				ath10k_set_rate_enabled(hw_rix, arg->rate_overrides, 1);
 				/* Set HT40 rateset too */
 				ath10k_set_rate_enabled(hw_rix + hw_nss * 10, arg->rate_overrides, 1);
@@ -2366,14 +2389,12 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 		}
 	}
 
-#if 0
 	for (i = 0; i < sizeof(arg->rate_overrides); i++) {
 		if (arg->rate_overrides[i] != 0xFF) {
-			ath10k_warn(ar, "vif: %d rate-overrides[%d]: 0x%x\n",
-				    arvif->vdev_id, i, arg->rate_overrides[i]);
+			ath10k_dbg(ar, ATH10K_DBG_MAC2, "vif: %d rate-overrides[%d]: 0x%x\n",
+				   arvif->vdev_id, i, arg->rate_overrides[i]);
 		}
 	}
-#endif
 }
 
 static u8 get_nss_from_chainmask(u16 chain_mask)

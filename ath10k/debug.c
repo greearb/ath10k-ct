@@ -1053,6 +1053,10 @@ static ssize_t ath10k_read_debug_level(struct file *file,
 		"BMI:              0x400\n"
 		"REGULATORY:       0x800\n"
 		"TESTMODE:        0x1000\n"
+		"WMI-PRINT:       0x2000\n"
+		"PCI-PS:          0x4000\n"
+		"AHB:             0x8000\n"
+		"MAC2:        0x20000000\n"
 		"INFO-AS-DBG: 0x40000000\n"
 		"FW:          0x80000000\n"
 		"ALL:         0xFFFFFFFF\n";
