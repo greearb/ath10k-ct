@@ -2278,6 +2278,7 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	int i;
 	int j;
 	int hw_rix;
+	bool ok160 = false;
 
 	/* So, what we really want here is the max number of chains the firmware
 	 * is compiled for.  But, since we can have 3x3 firmware run on 2x2 chips,
@@ -2299,6 +2300,10 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 		ath10k_warn(ar, "rate-override:  Skipping un-supported device-id, hw-nss: %d dev-id: 0x%x\n",
 			    hw_nss, ar->dev_id);
 		return;
+	}
+
+	if (ar->dev_id == QCA9984_1_0_DEVICE_ID) {
+		ok160 = true;
 	}
 
 	if (hw_nss < 3) {
@@ -2388,6 +2393,9 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 				ath10k_set_rate_enabled(hw_rix + hw_nss * 10, arg->rate_overrides, 1);
 				/* Set HT80 rateset too */
 				ath10k_set_rate_enabled(hw_rix + hw_nss * 2 * 10, arg->rate_overrides, 1);
+				/* And for NICs that support 160Mhz, set those */
+				if (ok160)
+					ath10k_set_rate_enabled(hw_rix + hw_nss * 3 * 10, arg->rate_overrides, 1);
 			}
 		}
 	}
@@ -2723,6 +2731,19 @@ static void ath10k_peer_assoc_h_vht(struct ath10k *ar,
 		   sta->addr, arg->peer_max_mpdu, arg->peer_flags,
 		   arg->peer_vht_rates.rx_max_rate, arg->peer_vht_rates.rx_mcs_set,
 		   arg->peer_vht_rates.tx_max_rate, arg->peer_vht_rates.tx_mcs_set);
+
+	if ((arg->peer_vht_rates.rx_max_rate) &&
+	    (sta->vht_cap.cap & IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_MASK)) {
+		if ((arg->peer_num_spatial_streams > 1) &&
+		    (arg->peer_vht_rates.rx_max_rate == 1560)) {
+			/* Must be 2x2 at 160Mhz is all it can do. */
+			arg->peer_bw_rxnss_override = 2;
+		}
+		else if (arg->peer_vht_rates.rx_max_rate == 780) {
+			/* Can only do 1x2 at 160Mhz (Long Guard Interval) */
+			arg->peer_bw_rxnss_override = 1;
+		}
+	}
 }
 
 static void ath10k_peer_assoc_h_qos(struct ath10k *ar,
@@ -3119,8 +3140,8 @@ static void ath10k_bss_assoc(struct ieee80211_hw *hw,
 	}
 
 	ath10k_dbg(ar, ATH10K_DBG_MAC,
-		   "mac vdev %d up (associated) bssid %pM aid %d\n",
-		   arvif->vdev_id, bss_conf->bssid, bss_conf->aid);
+		   "mac vdev %d up (associated) bssid %pM aid %d bandwidth %d\n",
+		   arvif->vdev_id, bss_conf->bssid, bss_conf->aid, ap_sta->bandwidth);
 
 	WARN_ON(arvif->is_up);
 
@@ -4832,7 +4853,8 @@ static struct ieee80211_sta_vht_cap ath10k_create_vht_cap(struct ath10k *ar)
 		vht_cap.cap |= val;
 	}
 
-	if ((ar->vht_cap_info & IEEE80211_VHT_CAP_SHORT_GI_160) && !(ar->vht_cap_info & IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_160_80PLUS80MHZ)) {
+	if ((ar->vht_cap_info & IEEE80211_VHT_CAP_SHORT_GI_160) &&
+	    ((ar->vht_cap_info & IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_MASK) == 0)) {
 		vht_cap.cap |= IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_160MHZ;
 	}
 
@@ -4846,6 +4868,21 @@ static struct ieee80211_sta_vht_cap ath10k_create_vht_cap(struct ath10k *ar)
 
 	vht_cap.vht_mcs.rx_mcs_map = cpu_to_le16(mcs_map);
 	vht_cap.vht_mcs.tx_mcs_map = cpu_to_le16(mcs_map);
+
+	/* If we are supporting 160Mhz or 80+80, then the NIC may be able to do a restricted NSS
+	 * for 160 or 80+80 vs what it can do for 80Mhz.  Give user-space a clue if that is the
+	 * case.
+	 */
+	if (vht_cap.cap & IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_MASK) {
+		/* Something more than 80Mhz at least */
+		if (ar->dev_id == QCA9984_1_0_DEVICE_ID) {
+			/* Can do only 2x2 VHT160 or 80+80.
+			 * 1560Mbps is 4x4 80Mhz or 2x2 160Mhz, long-guard-interval
+			 */
+			vht_cap.vht_mcs.rx_highest = 1560;
+			vht_cap.vht_mcs.tx_highest = 1560;
+		}
+	}
 
 	return vht_cap;
 }
@@ -5261,6 +5298,7 @@ static int ath10k_mac_set_txbf_conf(struct ath10k_vif *arvif)
 {
 	u32 value = 0;
 	struct ath10k *ar = arvif->ar;
+	struct ieee80211_vif *vif = arvif->vif;
 	int nsts;
 	int sound_dim;
 
@@ -5280,17 +5318,21 @@ static int ath10k_mac_set_txbf_conf(struct ath10k_vif *arvif)
 	if (!value)
 		return 0;
 
-	if (ar->vht_cap_info & IEEE80211_VHT_CAP_SU_BEAMFORMER_CAPABLE)
+	if ((ar->vht_cap_info & IEEE80211_VHT_CAP_SU_BEAMFORMER_CAPABLE) &&
+	    (vif->type != NL80211_IFTYPE_STATION))
 		value |= WMI_VDEV_PARAM_TXBF_SU_TX_BFER;
 
-	if (ar->vht_cap_info & IEEE80211_VHT_CAP_MU_BEAMFORMER_CAPABLE)
+	if ((ar->vht_cap_info & IEEE80211_VHT_CAP_MU_BEAMFORMER_CAPABLE) &&
+	    (vif->type != NL80211_IFTYPE_STATION))
 		value |= (WMI_VDEV_PARAM_TXBF_MU_TX_BFER |
 			  WMI_VDEV_PARAM_TXBF_SU_TX_BFER);
 
-	if (ar->vht_cap_info & IEEE80211_VHT_CAP_SU_BEAMFORMEE_CAPABLE)
+	if ((ar->vht_cap_info & IEEE80211_VHT_CAP_SU_BEAMFORMEE_CAPABLE) &&
+	    (vif->type == NL80211_IFTYPE_STATION))
 		value |= WMI_VDEV_PARAM_TXBF_SU_TX_BFEE;
 
-	if (ar->vht_cap_info & IEEE80211_VHT_CAP_MU_BEAMFORMEE_CAPABLE)
+	if ((ar->vht_cap_info & IEEE80211_VHT_CAP_MU_BEAMFORMEE_CAPABLE) &&
+		(vif->type == NL80211_IFTYPE_STATION))
 		value |= (WMI_VDEV_PARAM_TXBF_MU_TX_BFEE |
 			  WMI_VDEV_PARAM_TXBF_SU_TX_BFEE);
 
@@ -6390,8 +6432,8 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 	if (changed & IEEE80211_RC_SUPP_RATES_CHANGED ||
 	    changed & IEEE80211_RC_SMPS_CHANGED ||
 	    changed & IEEE80211_RC_NSS_CHANGED) {
-		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac update sta %pM supp rates/nss\n",
-			   sta->addr);
+		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac update sta %pM supp rates/nss bandwidth: %d\n",
+			   sta->addr, sta->bandwidth);
 
 		err = ath10k_station_assoc(ar, arvif->vif, sta, true);
 		if (err)
@@ -6676,8 +6718,8 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 		/*
 		 * New association.
 		 */
-		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac sta %pM associated\n",
-			   sta->addr);
+		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac sta %pM associated, bandwidth: %d\n",
+			   sta->addr, sta->bandwidth);
 
 		ret = ath10k_station_assoc(ar, vif, sta, false);
 		if (ret)
@@ -6689,8 +6731,8 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 		/*
 		 * Tdls station authorized.
 		 */
-		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac tdls sta %pM authorized\n",
-			   sta->addr);
+		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac tdls sta %pM authorized, bandwidth: %d\n",
+			   sta->addr, sta->bandwidth);
 
 		ret = ath10k_station_assoc(ar, vif, sta, false);
 		if (ret) {
@@ -8524,6 +8566,7 @@ static struct ieee80211_iface_combination ath10k_10_4_ct_if_comb[] = {
 		.radar_detect_widths =	BIT(NL80211_CHAN_WIDTH_20_NOHT) |
 					BIT(NL80211_CHAN_WIDTH_20) |
 					BIT(NL80211_CHAN_WIDTH_40) |
+					BIT(NL80211_CHAN_WIDTH_160) | /* TODO:  Verify --Ben */
 					BIT(NL80211_CHAN_WIDTH_80),
 #endif
 	},

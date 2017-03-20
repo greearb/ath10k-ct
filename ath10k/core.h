@@ -1136,6 +1136,7 @@ struct ath10k {
 					  * 0 means use whatever firmware defaults to (probably 8000).
 					  * Units are actually 1/1024 of a second, but pretty close to ms, at least.
 					  */
+		u32 ct_pshack;
 	} eeprom_overrides;
 
 	/* must be last */

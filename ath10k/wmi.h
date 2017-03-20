@@ -3128,6 +3128,7 @@ enum wmi_scan_completion_reason {
 	WMI_SCAN_REASON_PREEMPTED,
 	WMI_SCAN_REASON_TIMEDOUT,
 	WMI_SCAN_REASON_INTERNAL_FAILURE,
+	WMI_SCAN_REASON_BUSY = 13, /* A_EBUSY, CT firmware at least. */
 	WMI_SCAN_REASON_MAX,
 };
 
@@ -6152,6 +6153,7 @@ struct wmi_10_2_peer_assoc_complete_cmd_ct {
 	struct wmi_ct_assoc_overrides overrides;
 } __packed;
 
+#define PEER_BW_RXNSS_OVERRIDE_OFFSET  31
 struct wmi_10_4_peer_assoc_complete_cmd {
 	struct wmi_10_2_peer_assoc_complete_cmd cmd;
 	__le32 peer_bw_rxnss_override;
@@ -6180,6 +6182,7 @@ struct wmi_peer_assoc_complete_arg {
 	u32 peer_vht_caps;
 	enum wmi_phy_mode peer_phymode;
 	struct wmi_vht_rate_set_arg peer_vht_rates;
+	u32 peer_bw_rxnss_override;
 
 	/* CT firmware only (beta-15 and higher ) */
 	bool has_rate_overrides;
@@ -6545,7 +6548,9 @@ struct wmi_pdev_set_special_cmd {
 #define SET_SPECIAL_ID_PDEV_XRETRY_TH   9 /* Set the threshold for resetting phy due to failed retries, U16 */
 #define SET_SPECIAL_ID_RIFS_ENABLE    0xA /* Enable(1)/disable(0) RIFS.  Disabled by default. */
 #define SET_SPECIAL_ID_WMI_WD         0xB /* Set the watchdog trigger count, 0 means disable */
-
+#define SET_SPECIAL_ID_PSHACK         0xC /* flag 0x1:  ignore PS sleep message from STA
+                                           * flag 0x2:  mark mcast as 'data-is-buffered' regardless.
+                                           */
 
 #define CT_CCA_TYPE_MIN0 0
 #define CT_CCA_TYPE_MIN1 1

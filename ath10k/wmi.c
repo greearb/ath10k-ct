@@ -1975,7 +1975,8 @@ static void ath10k_wmi_event_scan_started(struct ath10k *ar)
 	}
 }
 
-static void ath10k_wmi_event_scan_start_failed(struct ath10k *ar)
+static void ath10k_wmi_event_scan_start_failed(struct ath10k *ar,
+					       enum wmi_scan_completion_reason reason)
 {
 	lockdep_assert_held(&ar->data_lock);
 
@@ -1989,6 +1990,15 @@ static void ath10k_wmi_event_scan_start_failed(struct ath10k *ar)
 		break;
 	case ATH10K_SCAN_STARTING:
 		complete(&ar->scan.started);
+		if (reason == WMI_SCAN_REASON_BUSY) {
+			/* Kick firmware to get us back in sync */
+			struct wmi_stop_scan_arg arg = {
+				.req_id = 1, /* FIXME */
+				.req_type = WMI_SCAN_STOP_ONE,
+				.u.scan_id = ATH10K_SCAN_ID,
+			};
+			ath10k_wmi_stop_scan(ar, &arg);
+		}
 		__ath10k_scan_finish(ar);
 		break;
 	}
@@ -2078,6 +2088,8 @@ ath10k_wmi_event_scan_type_str(enum wmi_scan_event_type type,
 			return "completed [timedout]";
 		case WMI_SCAN_REASON_INTERNAL_FAILURE:
 			return "completed [internal err]";
+		case WMI_SCAN_REASON_BUSY:
+			return "completed [failed, busy]";
 		case WMI_SCAN_REASON_MAX:
 			break;
 		}
@@ -2166,8 +2178,11 @@ int ath10k_wmi_event_scan(struct ath10k *ar, struct sk_buff *skb)
 		ath10k_wmi_event_scan_foreign_chan(ar, freq);
 		break;
 	case WMI_SCAN_EVENT_START_FAILED:
-		ath10k_warn(ar, "received scan start failure event\n");
-		ath10k_wmi_event_scan_start_failed(ar);
+		ath10k_warn(ar, "scan-start-failed event %s type %d reason %d freq %d req_id %d scan_id %d vdev_id %d state %s (%d)\n",
+			    ath10k_wmi_event_scan_type_str(event_type, reason),
+			    event_type, reason, freq, req_id, scan_id, vdev_id,
+			    ath10k_scan_state_str(ar->scan.state), ar->scan.state);
+		ath10k_wmi_event_scan_start_failed(ar, reason);
 		break;
 	case WMI_SCAN_EVENT_DEQUEUED:
 	case WMI_SCAN_EVENT_PREEMPTED:
@@ -6949,7 +6964,12 @@ ath10k_wmi_peer_assoc_fill_10_4(struct ath10k *ar, void *buf,
 	struct wmi_10_4_peer_assoc_complete_cmd *cmd = buf;
 
 	ath10k_wmi_peer_assoc_fill_10_2(ar, buf, arg);
-	cmd->peer_bw_rxnss_override = 0;
+	if (arg->peer_bw_rxnss_override)
+		cmd->peer_bw_rxnss_override =
+			__cpu_to_le32((arg->peer_bw_rxnss_override - 1) |
+				      (1<<PEER_BW_RXNSS_OVERRIDE_OFFSET));
+	else
+		cmd->peer_bw_rxnss_override = 0;
 }
 
 static int
