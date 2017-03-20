@@ -1,0 +1,4 @@
+
+To compile 4.4 kernels, you probably need to add this patch:
+mac80211-expose-txq-qdepth-to-drivers.patch
+

@@ -1,0 +1,127 @@
+From ef64b0af92bfb8867d66b85e22720165938f07f0 Mon Sep 17 00:00:00 2001
+From: Michal Kazior <michal.kazior@tieto.com>
+Date: Wed, 27 Jan 2016 15:26:12 +0100
+Subject: mac80211: expose txq queue depth and size to drivers
+
+This will allow drivers to make more educated
+decisions whether to defer transmission or not.
+
+Relying on wake_tx_queue() call count implicitly
+was not possible because it could be called
+without queued frame count actually changing on
+software tx aggregation start/stop code paths.
+
+It was also not possible to know how long
+byte-wise queue was without dequeueing.
+
+Signed-off-by: Michal Kazior <michal.kazior@tieto.com>
+Signed-off-by: Johannes Berg <johannes.berg@intel.com>
+
+diff --git a/include/net/mac80211.h b/include/net/mac80211.h
+index 19e4f82..a7e0dc8 100644
+--- a/include/net/mac80211.h
++++ b/include/net/mac80211.h
+@@ -5473,4 +5473,19 @@ void ieee80211_unreserve_tid(struct ieee80211_sta *sta, u8 tid);
+  */
+ struct sk_buff *ieee80211_tx_dequeue(struct ieee80211_hw *hw,
+ 				     struct ieee80211_txq *txq);
++
++/**
++ * ieee80211_txq_get_depth - get pending frame/byte count of given txq
++ *
++ * The values are not guaranteed to be coherent with regard to each other, i.e.
++ * txq state can change half-way of this function and the caller may end up
++ * with "new" frame_cnt and "old" byte_cnt or vice-versa.
++ *
++ * @txq: pointer obtained from station or virtual interface
++ * @frame_cnt: pointer to store frame count
++ * @byte_cnt: pointer to store byte count
++ */
++void ieee80211_txq_get_depth(struct ieee80211_txq *txq,
++			     unsigned long *frame_cnt,
++			     unsigned long *byte_cnt);
+ #endif /* MAC80211_H */
+diff --git a/net/mac80211/ieee80211_i.h b/net/mac80211/ieee80211_i.h
+index 8b4f925..ef232aa 100644
+--- a/net/mac80211/ieee80211_i.h
++++ b/net/mac80211/ieee80211_i.h
+@@ -809,6 +809,7 @@ enum txq_info_flags {
+ struct txq_info {
+ 	struct sk_buff_head queue;
+ 	unsigned long flags;
++	unsigned long byte_cnt;
+ 
+ 	/* keep last! */
+ 	struct ieee80211_txq txq;
+diff --git a/net/mac80211/iface.c b/net/mac80211/iface.c
+index 26306ca..b598555 100644
+--- a/net/mac80211/iface.c
++++ b/net/mac80211/iface.c
+@@ -1025,6 +1025,7 @@ static void ieee80211_do_stop(struct ieee80211_sub_if_data *sdata,
+ 
+ 		spin_lock_bh(&txqi->queue.lock);
+ 		ieee80211_purge_tx_queue(&local->hw, &txqi->queue);
++		txqi->byte_cnt = 0;
+ 		spin_unlock_bh(&txqi->queue.lock);
+ 
+ 		atomic_set(&sdata->txqs_len[txqi->txq.ac], 0);
+diff --git a/net/mac80211/sta_info.c b/net/mac80211/sta_info.c
+index fe3d82f..83f0e35 100644
+--- a/net/mac80211/sta_info.c
++++ b/net/mac80211/sta_info.c
+@@ -146,6 +146,7 @@ static void __cleanup_single_sta(struct sta_info *sta)
+ 
+ 			ieee80211_purge_tx_queue(&local->hw, &txqi->queue);
+ 			atomic_sub(n, &sdata->txqs_len[txqi->txq.ac]);
++			txqi->byte_cnt = 0;
+ 		}
+ 	}
+ 
+diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
+index 2a8d98c..4980522 100644
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -1289,7 +1289,11 @@ static void ieee80211_drv_tx(struct ieee80211_local *local,
+ 	if (atomic_read(&sdata->txqs_len[ac]) >= local->hw.txq_ac_max_pending)
+ 		netif_stop_subqueue(sdata->dev, ac);
+ 
+-	skb_queue_tail(&txqi->queue, skb);
++	spin_lock_bh(&txqi->queue.lock);
++	txqi->byte_cnt += skb->len;
++	__skb_queue_tail(&txqi->queue, skb);
++	spin_unlock_bh(&txqi->queue.lock);
++
+ 	drv_wake_tx_queue(local, txqi);
+ 
+ 	return;
+@@ -1317,6 +1321,8 @@ struct sk_buff *ieee80211_tx_dequeue(struct ieee80211_hw *hw,
+ 	if (!skb)
+ 		goto out;
+ 
++	txqi->byte_cnt -= skb->len;
++
+ 	atomic_dec(&sdata->txqs_len[ac]);
+ 	if (__netif_subqueue_stopped(sdata->dev, ac))
+ 		ieee80211_propagate_queue_wake(local, sdata->vif.hw_queue[ac]);
+diff --git a/net/mac80211/util.c b/net/mac80211/util.c
+index aad51e8..8ebca86 100644
+--- a/net/mac80211/util.c
++++ b/net/mac80211/util.c
+@@ -3548,3 +3548,17 @@ void ieee80211_init_tx_queue(struct ieee80211_sub_if_data *sdata,
+ 		txqi->txq.ac = IEEE80211_AC_BE;
+ 	}
+ }
++
++void ieee80211_txq_get_depth(struct ieee80211_txq *txq,
++			     unsigned long *frame_cnt,
++			     unsigned long *byte_cnt)
++{
++	struct txq_info *txqi = to_txq_info(txq);
++
++	if (frame_cnt)
++		*frame_cnt = txqi->queue.qlen;
++
++	if (byte_cnt)
++		*byte_cnt = txqi->byte_cnt;
++}
++EXPORT_SYMBOL(ieee80211_txq_get_depth);
