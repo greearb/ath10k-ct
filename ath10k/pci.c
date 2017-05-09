@@ -777,6 +777,7 @@ static int __ath10k_pci_rx_post_buf(struct ath10k_pci_pipe *pipe)
 		dev_kfree_skb_any(skb);
 		return -EIO;
 	}
+	ath10k_dbg_dma_map(ar, paddr, skb->len + skb_tailroom(skb), "PCI-RX-POST-BUF");
 
 	ATH10K_SKB_RXCB(skb)->paddr = paddr;
 
@@ -784,6 +785,7 @@ static int __ath10k_pci_rx_post_buf(struct ath10k_pci_pipe *pipe)
 	ret = __ath10k_ce_rx_post_buf(ce_pipe, skb, paddr);
 	spin_unlock_bh(&ar_pci->ce_lock);
 	if (ret) {
+		ath10k_dbg_dma_map(ar, paddr, skb->len + skb_tailroom(skb), "unmap: rx-post-buf");
 		dma_unmap_single(ar->dev, paddr, skb->len + skb_tailroom(skb),
 				 DMA_FROM_DEVICE);
 		dev_kfree_skb_any(skb);
@@ -1210,6 +1212,7 @@ static void ath10k_pci_process_rx_cb(struct ath10k_ce_pipe *ce_state,
 					     &nbytes) == 0) {
 		skb = transfer_context;
 		max_nbytes = skb->len + skb_tailroom(skb);
+		ath10k_dbg_dma_map(ar, ATH10K_SKB_RXCB(skb)->paddr, max_nbytes, "unmap: pci-process-rx-cb");
 		dma_unmap_single(ar->dev, ATH10K_SKB_RXCB(skb)->paddr,
 				 max_nbytes, DMA_FROM_DEVICE);
 
@@ -1329,6 +1332,7 @@ static void ath10k_pci_htt_tx_cb(struct ath10k_ce_pipe *ce_state)
 		if (!skb)
 			continue;
 
+		ath10k_dbg_dma_map(ar, ATH10K_SKB_RXCB(skb)->paddr, skb->len, "unmap: pci-htt-tx-cb");
 		dma_unmap_single(ar->dev, ATH10K_SKB_CB(skb)->paddr,
 				 skb->len, DMA_TO_DEVICE);
 		ath10k_htt_hif_tx_complete(ar, skb);
@@ -1985,6 +1989,7 @@ static void ath10k_pci_rx_pipe_cleanup(struct ath10k_pci_pipe *pci_pipe)
 
 		ce_ring->per_transfer_context[i] = NULL;
 
+		ath10k_dbg_dma_map(ar, ATH10K_SKB_RXCB(skb)->paddr, skb->len + skb_tailroom(skb), "unmap: pci-rx-pipe-cleanup");
 		dma_unmap_single(ar->dev, ATH10K_SKB_RXCB(skb)->paddr,
 				 skb->len + skb_tailroom(skb),
 				 DMA_FROM_DEVICE);
@@ -2121,6 +2126,7 @@ int ath10k_pci_hif_exchange_bmi_msg(struct ath10k *ar,
 		ret = -EIO;
 		goto err_dma;
 	}
+	ath10k_dbg_dma_map(ar, req_paddr, req_len, "HIF-EXCHANGE-BMI-MSG");
 
 	if (resp && resp_len) {
 		tresp = kzalloc(*resp_len, GFP_KERNEL);
@@ -2136,6 +2142,7 @@ int ath10k_pci_hif_exchange_bmi_msg(struct ath10k *ar,
 			ret = -EIO;
 			goto err_req;
 		}
+		ath10k_dbg_dma_map(ar, resp_paddr, *resp_len, "HIF-EXCHANGE-BMI-MSG-RESP");
 
 		xfer.wait_for_resp = true;
 		xfer.resp_len = 0;
@@ -2165,10 +2172,12 @@ err_resp:
 		u32 unused_buffer;
 
 		ath10k_ce_revoke_recv_next(ce_rx, NULL, &unused_buffer);
+		ath10k_dbg_dma_map(ar, resp_paddr, *resp_len, "unmap: bmi-resp-err");
 		dma_unmap_single(ar->dev, resp_paddr,
 				 *resp_len, DMA_FROM_DEVICE);
 	}
 err_req:
+	ath10k_dbg_dma_map(ar, req_paddr, req_len, "unmap: bmi-req-err");
 	dma_unmap_single(ar->dev, req_paddr, req_len, DMA_TO_DEVICE);
 
 	if (ret == 0 && resp_len) {

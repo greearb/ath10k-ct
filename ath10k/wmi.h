@@ -1753,6 +1753,7 @@ enum wmi_10_4_event_id {
 	WMI_10_4_PDEV_NFCAL_POWER_ALL_CHANNELS_EVENTID,
 	WMI_10_4_PDEV_BSS_CHAN_INFO_EVENTID,
 	WMI_10_4_MU_REPORT_EVENTID,
+	WMI_10_4_CSI_MESG_EVENTID = WMI_10_4_END_EVENTID - 2, /* CT Specific event ID */
 	WMI_10_4_PDEV_UTF_EVENTID = WMI_10_4_END_EVENTID - 1,
 };
 
@@ -6551,6 +6552,7 @@ struct wmi_pdev_set_special_cmd {
 #define SET_SPECIAL_ID_PSHACK         0xC /* flag 0x1:  ignore PS sleep message from STA
                                            * flag 0x2:  mark mcast as 'data-is-buffered' regardless.
                                            */
+#define SET_SPECIAL_ID_CSI            0xD /* 0 == disable, else enable reporting CSI data.  10.4 FW only at this time. */
 
 #define CT_CCA_TYPE_MIN0 0
 #define CT_CCA_TYPE_MIN1 1
@@ -6827,6 +6829,7 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb);
 void ath10k_wmi_event_chan_info(struct ath10k *ar, struct sk_buff *skb);
 void ath10k_wmi_event_echo(struct ath10k *ar, struct sk_buff *skb);
 int ath10k_wmi_event_debug_mesg(struct ath10k *ar, struct sk_buff *skb);
+int ath10k_wmi_event_csi_mesg(struct ath10k *ar, struct sk_buff *skb);
 void ath10k_wmi_event_update_stats(struct ath10k *ar, struct sk_buff *skb);
 void ath10k_wmi_event_vdev_start_resp(struct ath10k *ar, struct sk_buff *skb);
 void ath10k_wmi_event_vdev_stopped(struct ath10k *ar, struct sk_buff *skb);

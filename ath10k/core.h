@@ -807,11 +807,30 @@ struct ath10k_fw_components {
 	struct ath10k_fw_file fw_file;
 };
 
+#if defined CONFIG_DMAR_TABLE && !defined STANDALONE_CT
+#define MAX_DMA_DBG_ENTRIES 5000
+struct dma_dbg_entry {
+	unsigned long long addr;
+	unsigned long long at; /* jiffies */
+	unsigned long len;
+	const char* type;
+};
+
+void ath10k_dbg_dma_map(struct ath10k* ar, unsigned long long addr, unsigned long len, const char* dbg);
+#else
+#define ath10k_dbg_dma_map(a, b, c, d) /* NOP */
+#endif
+
 struct ath10k {
 	struct ath_common ath_common;
 	struct ieee80211_hw *hw;
 	struct device *dev;
 	u8 mac_addr[ETH_ALEN];
+
+#if defined CONFIG_DMAR_TABLE && !defined STANDALONE_CT
+	unsigned int next_dma_dbg_idx;
+	struct dma_dbg_entry dma_dbg[MAX_DMA_DBG_ENTRIES];
+#endif
 
 	struct ieee80211_iface_combination if_comb[8];
 
@@ -923,6 +942,7 @@ struct ath10k {
 #define ATH10K_FWCFG_SKID_LIMIT     (1<<10)
 #define ATH10K_FWCFG_REGDOM         (1<<11)
 #define ATH10K_FWCFG_BMISS_VDEVS    (1<<12)
+#define ATH10K_FWCFG_MAX_AMSDUS     (1<<13)
 
 		u32 flags; /* let us know which fields have been set */
 		char calname[100];
@@ -940,6 +960,7 @@ struct ath10k {
 		u32 skid_limit;
 		int regdom;
 		u32 bmiss_vdevs; /* To disable, set to 0 */
+		u32 max_amsdus;
 	} fwcfg;
 
 	struct {
@@ -1137,6 +1158,7 @@ struct ath10k {
 					  * Units are actually 1/1024 of a second, but pretty close to ms, at least.
 					  */
 		u32 ct_pshack;
+		u32 ct_csi;
 	} eeprom_overrides;
 
 	/* must be last */
@@ -1151,6 +1173,9 @@ static inline bool ath10k_peer_stats_enabled(struct ath10k *ar)
 
 	return false;
 }
+
+#define MAX_AR 50
+extern struct ath10k* ar_array[MAX_AR];
 
 struct ath10k *ath10k_core_create(size_t priv_size, struct device *dev,
 				  enum ath10k_bus bus,

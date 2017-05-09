@@ -267,8 +267,8 @@ int ath10k_htt_setup(struct ath10k_htt *htt)
 					     htt->max_num_ampdu,
 					     htt->max_num_amsdu);
 	if (status) {
-		ath10k_warn(ar, "failed to setup amsdu/ampdu limit: %d\n",
-			    status);
+		ath10k_warn(ar, "failed to setup amsdu=%d/ampdu=%d limit: %d\n",
+			    htt->max_num_ampdu, htt->max_num_amsdu, status);
 		return status;
 	}
 

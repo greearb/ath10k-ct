@@ -52,8 +52,10 @@ static inline void ath10k_htc_restore_tx_skb(struct ath10k_htc *htc,
 					     struct sk_buff *skb)
 {
 	struct ath10k_skb_cb *skb_cb = ATH10K_SKB_CB(skb);
+	struct ath10k *ar = htc->ar;
 
-	dma_unmap_single(htc->ar->dev, skb_cb->paddr, skb->len, DMA_TO_DEVICE);
+	ath10k_dbg_dma_map(ar, skb_cb->paddr, skb->len, "unmap: htc-restore-tx-skb");
+	dma_unmap_single(ar->dev, skb_cb->paddr, skb->len, DMA_TO_DEVICE);
 	skb_pull(skb, sizeof(struct ath10k_htc_hdr));
 }
 
@@ -148,6 +150,7 @@ int ath10k_htc_send(struct ath10k_htc *htc,
 		ret = -EIO;
 		goto err_credits;
 	}
+	ath10k_dbg_dma_map(ar, skb_cb->paddr, skb->len, "HTC_SEND-MAP-SKB");
 
 	sg_item.transfer_id = ep->eid;
 	sg_item.transfer_context = skb;
@@ -162,6 +165,7 @@ int ath10k_htc_send(struct ath10k_htc *htc,
 	return 0;
 
 err_unmap:
+	ath10k_dbg_dma_map(ar, skb_cb->paddr, skb->len, "unmap: htc-send-failure");
 	dma_unmap_single(dev, skb_cb->paddr, skb->len, DMA_TO_DEVICE);
 err_credits:
 	if (ep->tx_credit_flow_enabled) {

@@ -2616,6 +2616,9 @@ int ath10k_wmi_event_debug_mesg(struct ath10k *ar, struct sk_buff *skb)
 				      (skb->len - 4)/sizeof(__le32));
 	spin_unlock_bh(&ar->data_lock);
 
+	if (ath10k_debug_mask & ATH10K_DBG_NO_DBGLOG)
+		return 0;
+
 	if (ev->dropped_count)
 		ath10k_warn(ar, "WARNING: Dropped dbglog buffers: %d\n", __le32_to_cpu(ev->dropped_count));
 
@@ -2628,6 +2631,82 @@ int ath10k_wmi_event_debug_mesg(struct ath10k *ar, struct sk_buff *skb)
 					       (skb->len - 4)/sizeof(__le32),
 					       KERN_DEBUG);
 
+	return 0;
+}
+
+int ath10k_wmi_event_csi_mesg(struct ath10k *ar, struct sk_buff *skb)
+{
+	__le32 *ibuf;
+	int q = 0;
+	int len;
+	const char* lvl = KERN_INFO;
+
+	ath10k_dbg(ar, ATH10K_DBG_WMI, "wmi event csi mesg len %d\n",
+		   skb->len);
+
+	ibuf = (__le32*)(skb->data);
+	len = skb->len / 4;
+
+	dev_printk(lvl, ar->dev, "ath10k_pci ATH10K_CSI_BUFFER:\n");
+	while (q < len) {
+		if (q + 8 <= len) {
+			printk("%sath10k: [%04d]: %08X %08X %08X %08X %08X %08X %08X %08X\n",
+			       lvl, q,
+			       ibuf[q], ibuf[q+1], ibuf[q+2], ibuf[q+3],
+			       ibuf[q+4], ibuf[q+5], ibuf[q+6], ibuf[q+7]);
+			q += 8;
+		}
+		else if (q + 7 <= len) {
+			printk("%sath10k: [%04d]: %08X %08X %08X %08X %08X %08X %08X\n",
+			       lvl, q,
+			       ibuf[q], ibuf[q+1], ibuf[q+2], ibuf[q+3],
+			       ibuf[q+4], ibuf[q+5], ibuf[q+6]);
+			q += 7;
+		}
+		else if (q + 6 <= len) {
+			printk("%sath10k: [%04d]: %08X %08X %08X %08X %08X %08X\n",
+			       lvl, q,
+			       ibuf[q], ibuf[q+1], ibuf[q+2], ibuf[q+3],
+			       ibuf[q+4], ibuf[q+5]);
+			q += 6;
+		}
+		else if (q + 5 <= len) {
+			printk("%sath10k: [%04d]: %08X %08X %08X %08X %08X\n",
+			       lvl, q,
+			       ibuf[q], ibuf[q+1], ibuf[q+2], ibuf[q+3],
+			       ibuf[q+4]);
+			q += 5;
+		}
+		else if (q + 4 <= len) {
+			printk("%sath10k: [%04d]: %08X %08X %08X %08X\n",
+			       lvl, q,
+			       ibuf[q], ibuf[q+1], ibuf[q+2], ibuf[q+3]);
+			q += 4;
+		}
+		else if (q + 3 <= len) {
+			printk("%sath10k: [%04d]: %08X %08X %08X\n",
+			       lvl, q,
+			       ibuf[q], ibuf[q+1], ibuf[q+2]);
+			q += 3;
+		}
+		else if (q + 2 <= len) {
+			printk("%sath10k: [%04d]: %08X %08X\n",
+			       lvl, q,
+			       ibuf[q], ibuf[q+1]);
+			q += 2;
+		}
+		else if (q + 1 <= len) {
+			printk("%sath10k: [%04d]: %08X\n",
+			       lvl, q,
+			       ibuf[q]);
+			q += 1;
+		}
+		else {
+			break;
+		}
+	}/* while */
+
+	dev_printk(lvl, ar->dev, "ATH10K_END\n");
 	return 0;
 }
 
@@ -3629,6 +3708,7 @@ void ath10k_wmi_event_host_swba(struct ath10k *ar, struct sk_buff *skb)
 				ret = -EIO;
 				goto skip;
 			}
+			ath10k_dbg_dma_map(ar, paddr, bcn->len, "BEACON");
 
 			ATH10K_SKB_CB(bcn)->paddr = paddr;
 		} else {
@@ -4552,6 +4632,7 @@ static int ath10k_wmi_alloc_chunk(struct ath10k *ar, u32 req_id,
 		kfree(vaddr);
 		return -ENOMEM;
 	}
+	ath10k_dbg_dma_map(ar, paddr, pool_size, "WMI-ALLOC-CHUNK");
 
 	ar->wmi.mem_chunks[idx].vaddr = vaddr;
 	ar->wmi.mem_chunks[idx].paddr = paddr;
@@ -5456,6 +5537,9 @@ static void ath10k_wmi_10_4_op_rx(struct ath10k *ar, struct sk_buff *skb)
 		break;
 	case WMI_10_4_PDEV_BSS_CHAN_INFO_EVENTID:
 		ath10k_wmi_event_pdev_bss_chan_info(ar, skb);
+		break;
+	case WMI_10_4_CSI_MESG_EVENTID:
+		ath10k_wmi_event_csi_mesg(ar, skb);
 		break;
 	default:
 		ath10k_warn(ar, "Unknown eventid: %d\n", id);
@@ -8490,6 +8574,7 @@ void ath10k_wmi_free_host_mem(struct ath10k *ar)
 
 	/* free the host memory chunks requested by firmware */
 	for (i = 0; i < ar->wmi.num_mem_chunks; i++) {
+		ath10k_dbg_dma_map(ar, ar->wmi.mem_chunks[i].paddr, ar->wmi.mem_chunks[i].len, "unmap: WMI-FREE-HOST-MEM");
 		dma_unmap_single(ar->dev,
 				 ar->wmi.mem_chunks[i].paddr,
 				 ar->wmi.mem_chunks[i].len,
