@@ -470,7 +470,7 @@ struct ath10k_dbglog_entry_storage {
 
 /* estimated values, hopefully these are enough */
 #define ATH10K_ROM_BSS_BUF_LEN 30000
-#define ATH10K_RAM_BSS_BUF_LEN 50000
+#define ATH10K_RAM_BSS_BUF_LEN 55000
 
 /* used for crash-dump storage, protected by data-lock */
 struct ath10k_fw_crash_data {
@@ -947,6 +947,7 @@ struct ath10k {
 		u32 flags; /* let us know which fields have been set */
 		char calname[100];
 		char fwname[100];
+		char bname[100]; /* board file name */
 		u32 fwver;
 		u32 vdevs;
 		u32 stations;

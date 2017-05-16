@@ -196,8 +196,9 @@ void ath10k_debug_print_board_info(struct ath10k *ar)
 	ath10k_info(ar, "board_file api %d bmi_id %s crc32 %08x",
 		    ar->bd_api,
 		    boardinfo,
+		    ar->normal_mode_fw.board ?
 		    crc32_le(0, ar->normal_mode_fw.board->data,
-			     ar->normal_mode_fw.board->size));
+			     ar->normal_mode_fw.board->size) : 0xdeadbeef);
 }
 
 void ath10k_debug_print_boot_info(struct ath10k *ar)
@@ -404,6 +405,9 @@ static ssize_t ath10k_read_fwinfo(struct file *file,
 		len += snprintf(buf + len, buf_len - len, "4019\n");
 		break;
 	}
+
+	len += snprintf(buf + len, buf_len - len, "board:     %s\n",
+			ar->normal_mode_fw.fw_file.fw_board_name);
 
 	ret_cnt = simple_read_from_buffer(user_buf, count, ppos, buf, len);
 
