@@ -2229,6 +2229,17 @@ static int ath10k_core_init_firmware_features(struct ath10k *ar)
 	if (test_bit(ATH10K_FW_FEATURE_NO_BMISS_CT, fw_file->fw_features))
 		ar->bmiss_offload_max_vdev = 0;
 
+	/* CT Firmware for 9984 & 9980 recently gained support for configuring the number
+	 * of rate-ctrl objects.  Unfortunately, the old default we were using (10)
+	 * is too large if we are also maxing out 64-vdevs.  So, in order to make
+	 * this more backwards compat, add a hack here.
+	 */
+	if ((ar->fwcfg.vdevs == 64) && (ar->fwcfg.rate_ctrl_objs == 10)
+	    && ((ar->hw_rev == ATH10K_HW_QCA9984) || (ar->hw_rev == ATH10K_HW_QCA99X0))) {
+		ath10k_err(ar, "Detected fwcfg of 64 vdevs and 10 RC for 9980/84, setting to 7 RC objects so firmware will not OOM.\n");
+		ar->num_ratectrl_objs = 7;
+	}
+
 	return 0;
 }
 

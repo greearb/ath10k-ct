@@ -2297,6 +2297,7 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	 */
 	if (!((ar->dev_id == QCA9887_1_0_DEVICE_ID) ||
 	      (ar->dev_id == QCA988X_2_0_DEVICE_ID) ||
+	      (ar->dev_id == QCA9888_2_0_DEVICE_ID) || /* Wave-2 2x2 MU-MIMO NIC */
 	      (ar->dev_id == QCA99X0_2_0_DEVICE_ID) ||
 	      (ar->dev_id == QCA9984_1_0_DEVICE_ID))) {
 		ath10k_warn(ar, "rate-override:  Skipping un-supported device-id, hw-nss: %d dev-id: 0x%x\n",
@@ -2304,7 +2305,8 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 		return;
 	}
 
-	if (ar->dev_id == QCA9984_1_0_DEVICE_ID) {
+	if ((ar->dev_id == QCA9984_1_0_DEVICE_ID) ||
+	    (ar->dev_id == QCA9888_2_0_DEVICE_ID)) {
 		ok160 = true;
 	}
 

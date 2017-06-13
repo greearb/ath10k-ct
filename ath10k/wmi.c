@@ -4607,31 +4607,17 @@ static int ath10k_wmi_alloc_chunk(struct ath10k *ar, u32 req_id,
 				  u32 num_units, u32 unit_len)
 {
 	dma_addr_t paddr;
-	u32 pool_size = 0;
+	u32 pool_size;
 	int idx = ar->wmi.num_mem_chunks;
-	void *vaddr = NULL;
+	void *vaddr;
 
-	if (ar->wmi.num_mem_chunks == ARRAY_SIZE(ar->wmi.mem_chunks))
+	pool_size = num_units * round_up(unit_len, 4);
+	vaddr = dma_alloc_coherent(ar->dev, pool_size, &paddr, GFP_KERNEL);
+
+	if (!vaddr)
 		return -ENOMEM;
 
-	while (!vaddr && num_units) {
-		pool_size = num_units * round_up(unit_len, 4);
-		if (!pool_size)
-			return -EINVAL;
-
-		vaddr = kzalloc(pool_size, GFP_KERNEL | __GFP_NOWARN);
-		if (!vaddr)
-			num_units /= 2;
-	}
-
-	if (!num_units)
-		return -ENOMEM;
-
-	paddr = dma_map_single(ar->dev, vaddr, pool_size, DMA_BIDIRECTIONAL);
-	if (dma_mapping_error(ar->dev, paddr)) {
-		kfree(vaddr);
-		return -ENOMEM;
-	}
+	memset(vaddr, 0, pool_size);
 	ath10k_dbg_dma_map(ar, paddr, pool_size, "WMI-ALLOC-CHUNK");
 
 	ar->wmi.mem_chunks[idx].vaddr = vaddr;
@@ -6087,13 +6073,11 @@ static struct sk_buff *ath10k_wmi_10_4_op_gen_init(struct ath10k *ar)
 		 */
 		config.num_peer_keys = __cpu_to_le32(3);
 
-#if 0
 		if (ar->num_ratectrl_objs) {
 			ath10k_info(ar, "using %d firmware rate-ctrl objects\n",
 				    ar->num_ratectrl_objs);
 			config.tx_chain_mask |= __cpu_to_le32(ar->num_ratectrl_objs << 24);
 		}
-#endif
 	}
 	config.num_msdu_desc = __cpu_to_le32(ar->htt.max_num_pending_tx);
 	ath10k_warn(ar, "msdu-desc: %d  skid: %d\n",
@@ -8575,11 +8559,10 @@ void ath10k_wmi_free_host_mem(struct ath10k *ar)
 	/* free the host memory chunks requested by firmware */
 	for (i = 0; i < ar->wmi.num_mem_chunks; i++) {
 		ath10k_dbg_dma_map(ar, ar->wmi.mem_chunks[i].paddr, ar->wmi.mem_chunks[i].len, "unmap: WMI-FREE-HOST-MEM");
-		dma_unmap_single(ar->dev,
-				 ar->wmi.mem_chunks[i].paddr,
-				 ar->wmi.mem_chunks[i].len,
-				 DMA_BIDIRECTIONAL);
-		kfree(ar->wmi.mem_chunks[i].vaddr);
+		dma_free_coherent(ar->dev,
+			    ar->wmi.mem_chunks[i].len,
+			    ar->wmi.mem_chunks[i].vaddr,
+			    ar->wmi.mem_chunks[i].paddr);
 	}
 
 	ar->wmi.num_mem_chunks = 0;
