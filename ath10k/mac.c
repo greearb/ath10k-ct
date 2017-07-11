@@ -2329,7 +2329,7 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	ratemask = arvif->bitrate_mask.control[band].legacy;
 	rates = sband->bitrates;
 
-	ath10k_warn(ar, "band: %d  ratemask: 0x%x  hw-nss: %d dev-id: 0x%x\n",
+	ath10k_dbg(ar, ATH10K_DBG_MAC2, "band: %d  ratemask: 0x%x  hw-nss: %d dev-id: 0x%x\n",
 		    band, ratemask, hw_nss, ar->dev_id);
 
 	arg->has_rate_overrides = true;
