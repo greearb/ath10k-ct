@@ -6023,6 +6023,20 @@ static void ath10k_bss_info_changed(struct ieee80211_hw *hw,
 	mutex_unlock(&ar->conf_mutex);
 }
 
+static void ath10k_mac_op_set_coverage_class(struct ieee80211_hw *hw, s16 value)
+{
+	struct ath10k *ar = hw->priv;
+
+	/* This function should never be called if setting the coverage class
+	 * is not supported on this hardware.
+	 */
+	if (!ar->hw_params.hw_ops->set_coverage_class) {
+		WARN_ON_ONCE(1);
+		return;
+	}
+	ar->hw_params.hw_ops->set_coverage_class(ar, value);
+}
+
 static u32 ath10k_calc_ct_scan_flags(struct ath10k *ar,
 				     struct ieee80211_vif *vif)
 {
@@ -8210,6 +8224,7 @@ static const struct ieee80211_ops ath10k_ops = {
 	.remove_interface		= ath10k_remove_interface,
 	.configure_filter		= ath10k_configure_filter,
 	.bss_info_changed		= ath10k_bss_info_changed,
+	.set_coverage_class		= ath10k_mac_op_set_coverage_class,
 	.hw_scan			= ath10k_hw_scan,
 	.cancel_hw_scan			= ath10k_cancel_hw_scan,
 	.set_key			= ath10k_set_key,
@@ -8956,6 +8971,10 @@ int ath10k_mac_register(struct ath10k *ar)
 	if (!test_bit(ATH10K_FW_FEATURE_PEER_FLOW_CONTROL,
 		ar->running_fw->fw_file.fw_features))
 		ar->ops->wake_tx_queue = NULL;
+
+	/* Disable set_coverage_class for chipsets that do not support it. */
+	if (!ar->hw_params.hw_ops->set_coverage_class)
+		ar->ops->set_coverage_class = NULL;
 
 	ret = ath_regd_init(&ar->ath_common.regulatory, ar->hw->wiphy,
 			    ath10k_reg_notifier);
