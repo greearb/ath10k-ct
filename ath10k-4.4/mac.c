@@ -2149,10 +2149,12 @@ static void ath10k_peer_assoc_h_crypto(struct ath10k *ar,
 		arg->peer_flags |= ar->wmi.peer_flags->need_gtk_2_way;
 	}
 
+#ifndef STANDALONE_CT_BP_4_3_ERA
 	if (sta->mfp &&
 	    test_bit(ATH10K_FW_FEATURE_MFP_SUPPORT, ar->fw_features)) {
 		arg->peer_flags |= ar->wmi.peer_flags->pmf;
 	}
+#endif
 }
 
 static void ath10k_peer_assoc_h_rates(struct ath10k *ar,
@@ -7549,7 +7551,11 @@ static int ath10k_ampdu_action(struct ieee80211_hw *hw,
 			       struct ieee80211_vif *vif,
 			       enum ieee80211_ampdu_mlme_action action,
 			       struct ieee80211_sta *sta, u16 tid, u16 *ssn,
-			       u8 buf_size, bool amsdu)
+			       u8 buf_size
+#ifndef STANDALONE_CT_BP_4_3_ERA
+			       , bool amsdu
+#endif
+	)
 {
 	struct ath10k *ar = hw->priv;
 	struct ath10k_vif *arvif = ath10k_vif_to_arvif(vif);
