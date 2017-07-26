@@ -675,6 +675,11 @@ enum ath10k_fw_features {
 	 */
 	ATH10K_FW_FEATURE_NO_BMISS_CT = 43,
 
+	/* 10.1 firmware that supports getting temperature.  Stock
+	 * 10.1 cannot.
+	 */
+	ATH10K_FW_FEATURE_HAS_GET_TEMP_CT = 44,
+
 	/* keep last */
 	ATH10K_FW_FEATURE_COUNT,
 };

@@ -318,7 +318,7 @@ static struct wmi_cmd_map wmi_10x_cmd_map = {
 	.force_fw_hang_cmdid = WMI_CMD_UNSUPPORTED,
 	.gpio_config_cmdid = WMI_10X_GPIO_CONFIG_CMDID,
 	.gpio_output_cmdid = WMI_10X_GPIO_OUTPUT_CMDID,
-	.pdev_get_temperature_cmdid = WMI_CMD_UNSUPPORTED,
+	.pdev_get_temperature_cmdid = WMI_10X_PDEV_GET_TEMPERATURE_CMDID,
 	.pdev_enable_adaptive_cca_cmdid = WMI_CMD_UNSUPPORTED,
 	.scan_update_request_cmdid = WMI_CMD_UNSUPPORTED,
 	.vdev_standby_response_cmdid = WMI_CMD_UNSUPPORTED,
@@ -5029,6 +5029,7 @@ static int ath10k_wmi_event_temperature(struct ath10k *ar, struct sk_buff *skb)
 	const struct wmi_pdev_temperature_event *ev;
 
 	ev = (struct wmi_pdev_temperature_event *)skb->data;
+
 	if (WARN_ON(skb->len < sizeof(*ev)))
 		return -EPROTO;
 
@@ -5319,6 +5320,9 @@ static void ath10k_wmi_10_1_op_rx(struct ath10k *ar, struct sk_buff *skb)
 		break;
 	case WMI_10X_PDEV_UTF_EVENTID:
 		/* ignore utf events */
+		break;
+	case WMI_10_1_PDEV_TEMPERATURE_EVENTID: /* Newer CT firmware supports this */
+		ath10k_wmi_event_temperature(ar, skb);
 		break;
 	default:
 		ath10k_warn(ar, "Unknown eventid: %d\n", id);
@@ -7155,6 +7159,24 @@ ath10k_wmi_10_4_op_gen_peer_assoc(struct ath10k *ar,
 }
 
 static struct sk_buff *
+ath10k_wmi_10_1_op_gen_pdev_get_temperature(struct ath10k *ar)
+{
+	struct sk_buff *skb;
+
+	if (!test_bit(ATH10K_FW_FEATURE_HAS_GET_TEMP_CT,
+		      ar->running_fw->fw_file.fw_features)) {
+		return ERR_PTR(-ENOTSUPP);
+	}
+
+	skb = ath10k_wmi_alloc_skb(ar, 0);
+	if (!skb)
+		return ERR_PTR(-ENOMEM);
+
+	ath10k_dbg(ar, ATH10K_DBG_WMI, "wmi pdev get temperature\n");
+	return skb;
+}
+
+static struct sk_buff *
 ath10k_wmi_10_2_op_gen_pdev_get_temperature(struct ath10k *ar)
 {
 	struct sk_buff *skb;
@@ -8227,7 +8249,7 @@ static const struct wmi_ops wmi_10_1_ops = {
 	.gen_pdev_set_rd = ath10k_wmi_10x_op_gen_pdev_set_rd,
 	.gen_start_scan = ath10k_wmi_10x_op_gen_start_scan,
 	.gen_peer_assoc = ath10k_wmi_10_1_op_gen_peer_assoc,
-	/* .gen_pdev_get_temperature not implemented */
+	.gen_pdev_get_temperature = ath10k_wmi_10_1_op_gen_pdev_get_temperature,
 
 	/* shared with main branch */
 	.pull_scan = ath10k_wmi_op_pull_scan_ev,
