@@ -3003,6 +3003,13 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		ar->eeprom_overrides.ct_csi = val;
 		ath10k_warn(ar, "Setting CT-CSI dump override to 0x%x\n", val);
 	}
+	else if (id == SET_SPECIAL_ID_BW_DISABLE_MASK) {
+		/* Set bandwidth-disable mask */
+		ar->eeprom_overrides.rate_bw_disable_mask = val;
+
+		ath10k_warn(ar, "Setting pdev rate-bw-disable-mask to 0x%x.  Will take effect next time rates are configured.\n",
+			    val);
+	}
 	/* Below here are local driver hacks, and not necessarily passed directly to firmware. */
 	else if (id == 0x1001) {
 		/* Set station failed-transmit kickout threshold. */
@@ -3049,13 +3056,15 @@ static ssize_t ath10k_read_ct_special(struct file *file,
 		"id: 5 Allow-AMSDU-IBSS, 1 enabled, 0 disabled, global setting.\n"
 		"id: 6 Max TX-Power, 0-65535:  Latch max-tx-power, in 0.5 dbM Units.\n"
 		"id: 7 RC max PER Threshold: 0-256 (50 is default). Tune with Care.\n"
-		"id: 8 STA-TX-BW-MASK,  0:  all, 0x1: 20Mhz, 0x2 40Mhz, 0x4 80Mhz \n"
+		"id: 8 STA-TX-BW-MASK,  0:  all, 0x1: 20Mhz, 0x2 40Mhz, 0x4 80Mhz (station vdevs only)\n"
 		"id: 9 pdev failed retry threshold, U16, 10.1 firmware default is 0x40\n"
 		"id: 0xA Enable(1)/Disable(0) baseband RIFS.  Default is disabled.\n"
 		"id: 0xB WMI WD Keepalive(ms): 0xFFFFFFFF disables, otherwise suggest 8000+.\n"
 		"id: 0xC Power-Save hack:  0x1 ignore PS sleep message from STA\n"
 		"id:                       0x2 mark mcast as 'data-is-buffered' regardless\n"
 		"id: 0xD Enable CSI reporting for at least probe requests.\n"
+		"id: 0xE set rate-bandwidth-disable-mask: 20Mhz 0x1, 40Mhz 0x2, 80Mhz 0x4, 160Mhz 0x8.\n"
+		"    Takes effect next time rates are set.  Set to 0x0 for default rates.\n"
 		"\nBelow here are not actually sent to firmware directly, but configure the driver.\n"
 		"id: 0x1001 set sta-kickout threshold due to tx-failures (0 means disable.  Default is 20 * 16.)\n"
 		"\n";

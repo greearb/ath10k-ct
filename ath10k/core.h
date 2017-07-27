@@ -1156,6 +1156,11 @@ struct ath10k {
 		u8 tx_sta_bw_mask; /* 0:  all, 0x1: 20Mhz, 0x2 40Mhz, 0x4 80Mhz */
 		bool allow_ibss_amsdu;
 		bool rifs_enable_override;
+#define CT_DISABLE_20MHZ  0x1
+#define CT_DISABLE_40MHZ  0x2
+#define CT_DISABLE_80MHZ  0x4
+#define CT_DISABLE_160MHZ 0x8
+		u16 rate_bw_disable_mask;
 		u16 max_txpower;
 		u16 pdev_xretry_th; /* Max failed retries before wifi chip is reset, 10.1 firmware default is 0x40 */
 		u32 wmi_wd_keepalive_ms; /* 0xFFFFFFFF means disable, otherwise, FW will assert after X ms of not receiving

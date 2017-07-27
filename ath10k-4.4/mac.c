@@ -2250,6 +2250,7 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	int j;
 	int hw_rix;
 	int hw_nss = ar->num_rf_chains;
+	u16 rate_bw_disable_mask = ar->eeprom_overrides.rate_bw_disable_mask;
 
 	if (! test_bit(ATH10K_FW_FEATURE_CT_RATEMASK, ar->fw_features))
 		return;
@@ -2264,8 +2265,8 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	ratemask = arvif->bitrate_mask.control[band].legacy;
 	rates = sband->bitrates;
 
-	ath10k_warn(ar, "band: %d  ratemask: 0x%x  hw-nss: %d\n",
-		    band, ratemask, hw_nss);
+	ath10k_warn(ar, "band: %d  ratemask: 0x%x  hw-nss: %d rate-bw-disable-mask: 0x%x\n",
+		    band, ratemask, hw_nss, rate_bw_disable_mask);
 
 	arg->has_rate_overrides = true;
 
@@ -2304,9 +2305,11 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 				//ath10k_dbg(ar, ATH10K_DBG_MAC,
 				//	   "set-enabled, ht: hw-rix: %d, %d  i: %d j: %d\n",
 				//	   hw_rix, hw_rix + hw_nss * 8, i, j);
-				ath10k_set_rate_enabled(hw_rix, arg->rate_overrides, 1);
+				if (!(rate_bw_disable_mask & CT_DISABLE_20MHZ))
+					ath10k_set_rate_enabled(hw_rix, arg->rate_overrides, 1);
 				/* Set HT40 rateset too */
-				ath10k_set_rate_enabled(hw_rix + hw_nss * 8, arg->rate_overrides, 1);
+				if (!(rate_bw_disable_mask & CT_DISABLE_40MHZ))
+					ath10k_set_rate_enabled(hw_rix + hw_nss * 8, arg->rate_overrides, 1);
 			}
 		}
 	}
@@ -2327,11 +2330,14 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 				//ath10k_dbg(ar, ATH10K_DBG_MAC,
 				//	   "set-enabled, vht: hw-rix: %d, %d, %d  i: %d j: %d\n",
 				//	   hw_rix, hw_rix + hw_nss * 10, hw_rix + hw_nss * 2 * 10, i, j);
-				ath10k_set_rate_enabled(hw_rix, arg->rate_overrides, 1);
+				if (!(rate_bw_disable_mask & CT_DISABLE_20MHZ))
+					ath10k_set_rate_enabled(hw_rix, arg->rate_overrides, 1);
 				/* Set HT40 rateset too */
-				ath10k_set_rate_enabled(hw_rix + hw_nss * 10, arg->rate_overrides, 1);
+				if (!(rate_bw_disable_mask & CT_DISABLE_40MHZ))
+					ath10k_set_rate_enabled(hw_rix + hw_nss * 10, arg->rate_overrides, 1);
 				/* Set HT80 rateset too */
-				ath10k_set_rate_enabled(hw_rix + hw_nss * 2 * 10, arg->rate_overrides, 1);
+				if (!(rate_bw_disable_mask & CT_DISABLE_80MHZ))
+					ath10k_set_rate_enabled(hw_rix + hw_nss * 2 * 10, arg->rate_overrides, 1);
 			}
 		}
 	}

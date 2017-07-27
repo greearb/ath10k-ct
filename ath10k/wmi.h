@@ -6555,6 +6555,7 @@ struct wmi_pdev_set_special_cmd {
                                            * flag 0x2:  mark mcast as 'data-is-buffered' regardless.
                                            */
 #define SET_SPECIAL_ID_CSI            0xD /* 0 == disable, else enable reporting CSI data.  10.4 FW only at this time. */
+#define SET_SPECIAL_ID_BW_DISABLE_MASK 0xE /* 0x1 == disable 20Mhz, 0x2 == 40Mhz, 0x4 == 80Mhz, 0x8 == 160Mhz.  0x0 == default */
 
 #define CT_CCA_TYPE_MIN0 0
 #define CT_CCA_TYPE_MIN1 1
