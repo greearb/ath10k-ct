@@ -46,7 +46,7 @@
 #define WMI_READY_TIMEOUT (5 * HZ)
 #define ATH10K_FLUSH_TIMEOUT_HZ (5 * HZ)
 #define ATH10K_CONNECTION_LOSS_HZ (3 * HZ)
-#define ATH10K_NUM_CHANS 39
+#define ATH10K_NUM_CHANS 40
 
 /* Antenna noise floor */
 #define ATH10K_DEFAULT_NOISE_FLOOR -95
@@ -69,11 +69,32 @@
 #define ATH10K_NAPI_BUDGET      64
 #define ATH10K_NAPI_QUOTA_LIMIT 60
 
+/* SMBIOS type containing Board Data File Name Extension */
+#define ATH10K_SMBIOS_BDF_EXT_TYPE 0xF8
+
+/* SMBIOS type structure length (excluding strings-set) */
+#define ATH10K_SMBIOS_BDF_EXT_LENGTH 0x9
+
+/* Offset pointing to Board Data File Name Extension */
+#define ATH10K_SMBIOS_BDF_EXT_OFFSET 0x8
+
+/* Board Data File Name Extension string length.
+ * String format: BDF_<Customer ID>_<Extension>\0
+ */
+#define ATH10K_SMBIOS_BDF_EXT_STR_LENGTH 0x20
+
+/* The magic used by QCA spec */
+#define ATH10K_SMBIOS_BDF_EXT_MAGIC "BDF_"
+
+// TODO-BEN:  Remove this and fix all instances of vif_to_arvif.
+#define ath10k_vif_to_arvif(a) (void*)(a->drv_priv)
+
 struct ath10k;
 
 enum ath10k_bus {
 	ATH10K_BUS_PCI,
 	ATH10K_BUS_AHB,
+	ATH10K_BUS_SDIO,
 };
 
 static inline const char *ath10k_bus_str(enum ath10k_bus bus)
@@ -83,6 +104,8 @@ static inline const char *ath10k_bus_str(enum ath10k_bus bus)
 		return "pci";
 	case ATH10K_BUS_AHB:
 		return "ahb";
+	case ATH10K_BUS_SDIO:
+		return "sdio";
 	}
 
 	return "unknown";
@@ -367,6 +390,7 @@ struct ath10k_sta {
 	u32 nss;
 	u32 smps;
 	u16 peer_id;
+	struct rate_info txrate;
 
 	struct work_struct update_wk;
 
@@ -455,6 +479,21 @@ struct ath10k_vif_iter {
 	struct ath10k_vif *arvif;
 };
 
+/* Copy Engine register dump, protected by ce-lock */
+struct ath10k_ce_crash_data {
+	__le32 base_addr;
+	__le32 src_wr_idx;
+	__le32 src_r_idx;
+	__le32 dst_wr_idx;
+	__le32 dst_r_idx;
+};
+
+struct ath10k_ce_crash_hdr {
+	__le32 ce_count;
+	__le32 reserved[3]; /* for future use */
+	struct ath10k_ce_crash_data entries[];
+};
+
 /* This will store at least the last 128 entries.  Each dbglog message
  * is a max of 7 32-bit integers in length, but the length can be less
  * than that as well.
@@ -482,6 +521,7 @@ struct ath10k_fw_crash_data {
 	uuid_le uuid;
 	struct timespec timestamp;
 	__le32 registers[REG_DUMP_COUNT_QCA988X];
+	struct ath10k_ce_crash_data ce_crash_data[CE_COUNT_MAX];
 	__le32 stack_buf[ATH10K_FW_STACK_SIZE / sizeof(__le32)];
 	__le32 exc_stack_buf[ATH10K_FW_STACK_SIZE / sizeof(__le32)];
 	__le32 stack_addr;
@@ -544,14 +584,16 @@ enum ath10k_state {
 	 * stopped in ath10k_core_restart() work holding conf_mutex. The state
 	 * RESTARTED means that the device is up and mac80211 has started hw
 	 * reconfiguration. Once mac80211 is done with the reconfiguration we
-	 * set the state to STATE_ON in reconfig_complete(). */
+	 * set the state to STATE_ON in reconfig_complete().
+	 */
 	ATH10K_STATE_RESTARTING,
 	ATH10K_STATE_RESTARTED,
 
 	/* The device has crashed while restarting hw. This state is like ON
 	 * but commands are blocked in HTC and -ECOMM response is given. This
 	 * prevents completion timeouts and makes the driver more responsive to
-	 * userspace commands. This is also prevents recursive recovery. */
+	 * userspace commands. This is also prevents recursive recovery.
+	 */
 	ATH10K_STATE_WEDGED,
 
 	/* factory tests */
@@ -639,6 +681,13 @@ enum ath10k_fw_features {
 	 * to experiment sending NULL func data frames in HTT TX
 	 */
 	ATH10K_FW_FEATURE_SKIP_NULL_FUNC_WAR = 15,
+
+	/* Firmware allow other BSS mesh broadcast/multicast frames without
+	 * creating monitor interface. Appropriate rxfilters are programmed for
+	 * mesh vdev by firmware itself. This feature flags will be used for
+	 * not creating monitor vdev while configuring mesh node.
+	 */
+	ATH10K_FW_FEATURE_ALLOWS_MESH_BCAST = 16,
 
 	/* tx-status has the noack bits (CT firmware version 14 and higher ) */
 	ATH10K_FW_FEATURE_HAS_TXSTATUS_NOACK = 30,
@@ -837,19 +886,20 @@ struct ath10k_fw_components {
 	struct ath10k_fw_file fw_file;
 };
 
-#if defined CONFIG_DMAR_TABLE && !defined STANDALONE_CT
-#define MAX_DMA_DBG_ENTRIES 5000
-struct dma_dbg_entry {
-	unsigned long long addr;
-	unsigned long long at; /* jiffies */
-	unsigned long len;
-	const char* type;
+struct ath10k_per_peer_tx_stats {
+	u32	succ_bytes;
+	u32	retry_bytes;
+	u32	failed_bytes;
+	u8	ratecode;
+	u8	flags;
+	u16	peer_id;
+	u16	succ_pkts;
+	u16	retry_pkts;
+	u16	failed_pkts;
+	u16	duration;
+	u32	reserved1;
+	u32	reserved2;
 };
-
-void ath10k_dbg_dma_map(struct ath10k* ar, unsigned long long addr, unsigned long len, const char* dbg);
-#else
-#define ath10k_dbg_dma_map(a, b, c, d) /* NOP */
-#endif
 
 struct ath10k {
 	struct ath_common ath_common;
@@ -857,11 +907,6 @@ struct ath10k {
 	struct ieee80211_ops *ops;
 	struct device *dev;
 	u8 mac_addr[ETH_ALEN];
-
-#if defined CONFIG_DMAR_TABLE && !defined STANDALONE_CT
-	unsigned int next_dma_dbg_idx;
-	struct dma_dbg_entry dma_dbg[MAX_DMA_DBG_ENTRIES];
-#endif
 
 	struct ieee80211_iface_combination if_comb[8];
 
@@ -879,11 +924,14 @@ struct ath10k {
 	u32 phy_capability;
 	u32 hw_min_tx_power;
 	u32 hw_max_tx_power;
+	u32 hw_eeprom_rd;
 	u32 ht_cap_info;
 	u32 vht_cap_info;
 	u32 num_rf_chains;
 	u32 max_spatial_stream;
 	/* protected by conf_mutex */
+	u32 low_5ghz_chan;
+	u32 high_5ghz_chan;
 	bool ani_enabled;
 
 	bool p2p;
@@ -897,6 +945,7 @@ struct ath10k {
 	struct completion target_suspend;
 
 	const struct ath10k_hw_regs *regs;
+	const struct ath10k_hw_ce_regs *hw_ce_regs;
 	const struct ath10k_hw_values *hw_values;
 	struct ath10k_bmi bmi;
 	struct ath10k_wmi wmi;
@@ -962,6 +1011,8 @@ struct ath10k {
 		bool bmi_ids_valid;
 		u8 bmi_board_id;
 		u8 bmi_chip_id;
+
+		char bdf_ext[ATH10K_SMBIOS_BDF_EXT_STR_LENGTH];
 	} id;
 
 	int fw_api;
@@ -1070,7 +1121,8 @@ struct ath10k {
 	struct work_struct restart_work;
 
 	/* cycle count is reported twice for each visited channel during scan.
-	 * access protected by data_lock */
+	 * access protected by data_lock
+	 */
 	u32 survey_last_rx_clear_count;
 	u32 survey_last_cycle_count;
 	struct survey_info survey[ATH10K_NUM_CHANS];
@@ -1117,10 +1169,24 @@ struct ath10k {
 
 	struct ath10k_thermal thermal;
 	struct ath10k_wow wow;
+	struct ath10k_per_peer_tx_stats peer_tx_stats;
 
 	/* NAPI */
 	struct net_device napi_dev;
 	struct napi_struct napi;
+
+	struct work_struct set_coverage_class_work;
+	/* protected by conf_mutex */
+	struct {
+		/* writing also protected by data_lock */
+		s16 coverage_class;
+
+		u32 reg_phyclk;
+		u32 reg_slottime_conf;
+		u32 reg_slottime_orig;
+		u32 reg_ack_cts_timeout_conf;
+		u32 reg_ack_cts_timeout_orig;
+	} fw_coverage;
 
 	/* Index 0 is for 5Ghz, index 1 is for 2.4Ghz, CT firmware only. */
 	/* be sure to flush this to firmware after resets */
@@ -1168,9 +1234,6 @@ static inline bool ath10k_peer_stats_enabled(struct ath10k *ar)
 
 	return false;
 }
-
-#define MAX_AR 50
-extern struct ath10k* ar_array[MAX_AR];
 
 struct ath10k *ath10k_core_create(size_t priv_size, struct device *dev,
 				  enum ath10k_bus bus,

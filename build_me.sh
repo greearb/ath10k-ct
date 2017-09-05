@@ -14,13 +14,21 @@ fi
 
 if [[ "_$CTAVER" == "_" ]]
     then
-    echo "Enter kernel version to build for: 4.4  (or enter for default which is 4.7 currently):"
+    echo "Enter kernel version to build for: 4.4, 4.7, 4.9, 4.13  (or enter for default which is 4.7 currently):"
     read CTAVER
 fi
 
 if [[ "_$CTAVER" == "_4.4" ]]
     then
     KVDIR_EXTRA="-4.4"
+fi
+if [[ "_$CTAVER" == "_4.9" ]]
+    then
+    KVDIR_EXTRA="-4.9"
+fi
+if [[ "_$CTAVER" == "_4.13" ]]
+    then
+    KVDIR_EXTRA="-4.13"
 fi
 
 cp -ar ath10k${KVDIR_EXTRA} tmp/ath10k.build

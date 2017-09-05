@@ -4093,7 +4093,12 @@ static int ath10k_mac_tx(struct ath10k *ar,
 		ath10k_tx_h_8023(skb);
 		break;
 	case ATH10K_HW_TXRX_RAW:
-		if (!test_bit(ATH10K_FLAG_RAW_MODE, &ar->dev_flags)) {
+		if (!(test_bit(ATH10K_FLAG_RAW_MODE, &ar->dev_flags) ||
+		      /* Any CT firmware recent enough to support rate-mask should be able to do
+		       * at least some raw-tx too.  Works on recent 10.1 firmware with non-encrypted
+		       * frames transmitted on a monitor device, at least.
+		       */
+		      test_bit(ATH10K_FW_FEATURE_CT_RATEMASK, ar->running_fw->fw_file.fw_features))) {
 			WARN_ON_ONCE(1);
 			ieee80211_free_txskb(hw, skb);
 			return -ENOTSUPP;
