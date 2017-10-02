@@ -3492,8 +3492,8 @@ static const struct ath10k_bus_ops ath10k_pci_bus_ops = {
 	.get_num_banks	= ath10k_pci_get_num_banks,
 };
 
-static int ath10k_pci_probe(struct pci_dev *pdev,
-			    const struct pci_device_id *pci_dev)
+static int __ath10k_pci_probe(struct pci_dev *pdev,
+			      const struct pci_device_id *pci_dev)
 {
 	int ret = 0;
 	struct ath10k *ar;
@@ -3667,6 +3667,22 @@ err_core_destroy:
 
 	return ret;
 }
+
+static int ath10k_pci_probe(struct pci_dev *pdev,
+			    const struct pci_device_id *pci_dev)
+{
+	int cnt = 0;
+	int rv;
+	do {
+		rv = __ath10k_pci_probe(pdev, pci_dev);
+		if (rv == 0)
+			return rv;
+		pr_err("ath10k: failed to probe PCI : %d, retry-count: %d\n", rv, cnt);
+		mdelay(10); /* let the ath10k firmware gerbil take a small break */
+	} while (cnt++ < 10);
+	return rv;
+}
+
 
 static void ath10k_pci_remove(struct pci_dev *pdev)
 {
