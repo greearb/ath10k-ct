@@ -6244,6 +6244,12 @@ static void ath10k_mac_op_set_coverage_class(struct ieee80211_hw *hw, s16 value)
 		WARN_ON_ONCE(1);
 		return;
 	}
+
+	mutex_lock(&ar->conf_mutex);
+	if (value != ar->fw_coverage.coverage_class)
+		ar->eeprom_overrides.coverage_already_set = false; /* value is being changed */
+	mutex_unlock(&ar->conf_mutex);
+
 	ar->hw_params.hw_ops->set_coverage_class(ar, value);
 }
 

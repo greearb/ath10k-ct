@@ -5195,7 +5195,11 @@ static inline void ath10k_wmi_queue_set_coverage_class_work(struct ath10k *ar)
 		 * coverage class has a non-zero value.
 		 */
 		if (ar->fw_coverage.coverage_class)
-			queue_work(ar->workqueue, &ar->set_coverage_class_work);
+			if (!(test_bit(ATH10K_FW_FEATURE_SET_SPECIAL_CT,
+				       ar->running_fw->fw_file.fw_features) &&
+			      ar->eeprom_overrides.coverage_already_set))
+
+				queue_work(ar->workqueue, &ar->set_coverage_class_work);
 
 		spin_unlock_bh(&ar->data_lock);
 	}

@@ -2713,6 +2713,16 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_NOISE_FLR_THRESH, val);
 		}
 
+		if (ar->eeprom_overrides.reg_ack_cts) {
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_ACK_CTS,
+						    ar->eeprom_overrides.reg_ack_cts);
+		}
+
+		if (ar->eeprom_overrides.reg_ifs_slot) {
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_SLOT,
+						    ar->eeprom_overrides.reg_ifs_slot);
+		}
+
 		/* TODO:  Should probably be per-band?? */
 		if (ar->eeprom_overrides.thresh62_ext) {
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_THRESH62_EXT,

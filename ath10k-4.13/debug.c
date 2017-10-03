@@ -1601,8 +1601,12 @@ static int ath10k_fw_crash_dump_open(struct inode *inode, struct file *file)
 {
 	struct ath10k *ar = inode->i_private;
 	struct ath10k_dump_file_data *dump;
+	static bool do_once = true;
 
-	ath10k_warn(ar, "fw_crash_dump debugfs file is deprecated, please use /sys/class/devcoredump instead.");
+	if (do_once) {
+		ath10k_warn(ar, "fw_crash_dump debugfs file is deprecated, please use /sys/class/devcoredump instead.");
+		do_once = false;
+	}
 
 	dump = ath10k_build_dump_file(ar, true);
 	if (!dump)
@@ -3009,7 +3013,13 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 	val = tmp & 0xFFFFFFFF;
 
 	mutex_lock(&ar->conf_mutex);
-	if (id == SET_SPECIAL_ID_THRESH62_EXT) {
+	if (id == SET_SPECIAL_ID_ACK_CTS) {
+		ar->eeprom_overrides.reg_ack_cts = val;
+	}
+	else if (id == SET_SPECIAL_ID_SLOT) {
+		ar->eeprom_overrides.reg_ifs_slot = val;
+	}
+	else if (id == SET_SPECIAL_ID_THRESH62_EXT) {
 		ar->eeprom_overrides.thresh62_ext = val;
 	}
 	else if (id == SET_SPECIAL_ID_NOISE_FLR_THRESH) {
