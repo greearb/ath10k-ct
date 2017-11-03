@@ -689,6 +689,9 @@ enum ath10k_fw_features {
 	 */
 	ATH10K_FW_FEATURE_ALLOWS_MESH_BCAST = 16,
 
+	/* Firmware does not support power save in station mode. */
+	ATH10K_FW_FEATURE_NO_PS = 17,
+
 	/* tx-status has the noack bits (CT firmware version 14 and higher ) */
 	ATH10K_FW_FEATURE_HAS_TXSTATUS_NOACK = 30,
 
