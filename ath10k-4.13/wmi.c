@@ -2670,6 +2670,30 @@ int ath10k_wmi_event_csi_mesg(struct ath10k *ar, struct sk_buff *skb)
 	ibuf = (__le32*)(skb->data);
 	len = skb->len / 4;
 
+	/* Add to accumulator */
+	if (ar->csi_data_len + skb->len < sizeof(ar->csi_data)) {
+		memcpy(ar->csi_data + ar->csi_data_len, skb->data, skb->len);
+		ar->csi_data_len += skb->len;
+	}
+	else {
+		ath10k_err(ar, "CSI accumulator overflow, csi-data-len: %d  skb->len: %d\n",
+			   ar->csi_data_len, skb->len);
+		goto printme;
+	}
+
+	if (ibuf[len - 1] != 0x444E4544) {
+		// Wait for next one, this one is not the 'DNED'
+		ath10k_dbg(ar, ATH10K_DBG_WMI,
+			   "CSI last: 0x%x, will look for another one, accum-len: %d\n",
+			   ibuf[len - 1], ar->csi_data_len);
+		return 0;
+	}
+
+printme:
+	ibuf = (__le32*)(ar->csi_data);
+	len = ar->csi_data_len / 4;
+
+	/* This is quite noisy, need a better way to get this to user-space. */
 	dev_printk(lvl, ar->dev, "ath10k_pci ATH10K_CSI_BUFFER:\n");
 	while (q < len) {
 		if (q + 8 <= len) {
@@ -2729,6 +2753,7 @@ int ath10k_wmi_event_csi_mesg(struct ath10k *ar, struct sk_buff *skb)
 		}
 	}/* while */
 
+	ar->csi_data_len = 0; /* reset accumulator */
 	dev_printk(lvl, ar->dev, "ATH10K_END\n");
 	return 0;
 }

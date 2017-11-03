@@ -556,7 +556,7 @@ static const struct firmware *ath10k_fetch_fw_file(struct ath10k *ar,
 		dir = ".";
 
 	snprintf(filename, sizeof(filename), "%s/%s", dir, file);
-	ret = request_firmware_direct(&fw, filename, ar->dev);
+	ret = request_firmware(&fw, filename, ar->dev);
 	ath10k_dbg(ar, ATH10K_DBG_BOOT, "boot fw request '%s': %d\n",
 		   filename, ret);
 
@@ -1923,7 +1923,7 @@ static int ath10k_core_pre_cal_config(struct ath10k *ar)
 
 	ret = ath10k_download_and_run_otp(ar);
 	if (ret) {
-		ath10k_err(ar, "failed to run otp: %d  (pre-cal-config)\n", ret);
+		ath10k_err(ar, "failed to run otp: %d (pre-cal-config)\n", ret);
 		return ret;
 	}
 
@@ -2765,6 +2765,9 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		if (ar->eeprom_overrides.rate_bw_disable_mask)
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_BW_DISABLE_MASK,
 						    ar->eeprom_overrides.rate_bw_disable_mask);
+		if (ar->eeprom_overrides.tx_debug)
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_TX_DBG,
+						    ar->eeprom_overrides.tx_debug);
 	}
 
 	return 0;
@@ -2951,11 +2954,7 @@ static void ath10k_core_register_work(struct work_struct *work)
 
 	status = ath10k_core_probe_fw(ar);
 	if (status) {
-		ath10k_err(ar, "could not probe fw (%d), releasing napi\n", status);
-		/* Make sure that NAPI state is cleaned up, it can otherwise fail
-		 * to be cleaned up in some error cases.
-		 */
-		napi_disable(&ar->napi);
+		ath10k_err(ar, "could not probe fw (%d)\n", status);
 		goto err;
 	}
 

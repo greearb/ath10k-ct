@@ -3021,6 +3021,12 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		ath10k_warn(ar, "Setting pdev rate-bw-disable-mask to 0x%x.  Will take effect next time rates are configured.\n",
 			    val);
 	}
+	else if (id == SET_SPECIAL_ID_TX_DBG) {
+		/* Set TX debugging */
+		ar->eeprom_overrides.tx_debug = val;
+
+		ath10k_warn(ar, "Setting firmware tx-debug to 0x%x.\n", val);
+	}
 	/* Below here are local driver hacks, and not necessarily passed directly to firmware. */
 	else if (id == 0x1001) {
 		/* Set station failed-transmit kickout threshold. */

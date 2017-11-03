@@ -485,6 +485,15 @@ static void ath10k_hw_qca988x_set_coverage_class(struct ath10k *ar,
 	    phyclk_reg == ar->fw_coverage.reg_phyclk)
 		goto unlock;
 
+	{
+		static int did_once = 0;
+		if (!did_once) {
+			ath10k_warn(ar, "set-coverage-class, phyclk: %d  value: %d\n", phyclk, value);
+			did_once = true;
+		}
+	}
+
+
 	/* Store new initial register values from the firmware. */
 	if (slottime_reg != ar->fw_coverage.reg_slottime_conf)
 		ar->fw_coverage.reg_slottime_orig = slottime_reg;

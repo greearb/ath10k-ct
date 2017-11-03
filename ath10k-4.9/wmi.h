@@ -6610,6 +6610,9 @@ struct wmi_pdev_set_special_cmd {
 #define SET_SPECIAL_ID_BW_DISABLE_MASK 0xE /* 0x1 == disable 20Mhz, 0x2 == 40Mhz, 0x4 == 80Mhz, 0x8 == 160Mhz.  0x0 == default */
 #define SET_SPECIAL_ID_TXBF_CV_MSG     0xF /* 0x1 == enable, 0x0 == disable (default). */
 
+/* Requires specially compiled firmware (-T option) to have any useful effect. */
+#define SET_SPECIAL_ID_TX_DBG         0x99 /* 0x1 == enable, 0x2 == pkt-dbg, 0x0 == disable (default). */
+
 #define CT_CCA_TYPE_MIN0 0
 #define CT_CCA_TYPE_MIN1 1
 #define CT_CCA_TYPE_MIN2 2
