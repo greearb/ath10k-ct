@@ -1,5 +1,5 @@
 This is a copy of the drivers/net/wireless/ath/ath10k tree from
-the Candela-Technologies (CT) 4.7 (and other) kernels.
+the Candela-Technologies (CT) 4.7, 4.9, and 4.13 kernels.
 
 This package may be useful for people trying to use CT ath10k
 firmware on LEDE/OpenWRT, or other custom-built kernels.

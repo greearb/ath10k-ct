@@ -3098,6 +3098,18 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		ath10k_warn(ar, "Setting pdev rate-bw-disable-mask to 0x%x.  Will take effect next time rates are configured.\n",
 			    val);
 	}
+	else if (id == SET_SPECIAL_ID_TXBF_CV_MSG) {
+		ar->eeprom_overrides.txbf_cv_msg = val;
+
+		ath10k_warn(ar, "Setting pdev txbf-cv-msg to 0x%x.\n",
+			    val);
+	}
+	else if (id == SET_SPECIAL_ID_RX_ALL_MGT) {
+		ar->eeprom_overrides.rx_all_mgt = val;
+
+		ath10k_warn(ar, "Setting pdev rx-all-mgt to 0x%x.\n",
+			    val);
+	}
 	else if (id == SET_SPECIAL_ID_TX_DBG) {
 		/* Set TX debugging */
 		ar->eeprom_overrides.tx_debug = val;

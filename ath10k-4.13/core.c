@@ -2766,6 +2766,12 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		if (ar->eeprom_overrides.rate_bw_disable_mask)
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_BW_DISABLE_MASK,
 						    ar->eeprom_overrides.rate_bw_disable_mask);
+		if (ar->eeprom_overrides.txbf_cv_msg)
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_TXBF_CV_MSG,
+						    ar->eeprom_overrides.txbf_cv_msg);
+		if (ar->eeprom_overrides.rx_all_mgt)
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_RX_ALL_MGT,
+						    ar->eeprom_overrides.rx_all_mgt);
 		if (ar->eeprom_overrides.tx_debug)
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_TX_DBG,
 						    ar->eeprom_overrides.tx_debug);
