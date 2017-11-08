@@ -2769,6 +2769,16 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		if (ar->eeprom_overrides.tx_debug)
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_TX_DBG,
 						    ar->eeprom_overrides.tx_debug);
+
+		if (ar->eeprom_overrides.su_sounding_timer_ms)
+			ath10k_wmi_pdev_set_param(ar, ar->wmi.pdev_param->txbf_sound_period_cmdid,
+						  ar->eeprom_overrides.su_sounding_timer_ms);
+
+		/* See WMI_FWTEST_CMDID in wlan_dev.c in firmware for these hard-coded values. */
+		/* Set default MU sounding period. */
+		if (ar->eeprom_overrides.mu_sounding_timer_ms)
+			ath10k_wmi_pdev_set_fwtest(ar, 81,
+						   ar->eeprom_overrides.mu_sounding_timer_ms);
 	}
 
 	return 0;

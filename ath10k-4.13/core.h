@@ -1227,6 +1227,8 @@ struct ath10k {
 		u32 ct_csi;
 		u32 reg_ack_cts;
 		u32 reg_ifs_slot;
+		u32 mu_sounding_timer_ms;
+		u32 su_sounding_timer_ms;
 	} eeprom_overrides;
 
 	/* CSI report accumulator. */

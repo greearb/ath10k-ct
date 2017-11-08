@@ -6659,6 +6659,16 @@ struct wmi_pdev_set_special_cmd {
 };
 int ath10k_wmi_pdev_set_special(struct ath10k *ar, u32 id, u32 val);
 
+/* Back door pdev hack API for 10.4 firmware.
+ * Similar to CT firmware's set-special API it seems.
+ */
+struct wmi_fwtest_set_param_cmd {
+    /** parameter id   */
+    __le32 param_id;
+    /** parameter value */
+    __le32 param_value;
+};
+
 /* WOW structures */
 enum wmi_wow_wakeup_event {
 	WOW_BMISS_EVENT = 0,

@@ -2694,6 +2694,7 @@ printme:
 	len = ar->csi_data_len / 4;
 
 	/* This is quite noisy, need a better way to get this to user-space. */
+	/* This is the CFR data, channel-frequency-response */
 	dev_printk(lvl, ar->dev, "ath10k_pci ATH10K_CSI_BUFFER:\n");
 	while (q < len) {
 		if (q + 8 <= len) {
@@ -5888,6 +5889,31 @@ ath10k_wmi_op_gen_pdev_set_param(struct ath10k *ar, u32 id, u32 value)
 	return skb;
 }
 
+static struct sk_buff *
+ath10k_wmi_op_gen_pdev_set_fwtest(struct ath10k *ar, u32 id, u32 value)
+{
+	struct wmi_fwtest_set_param_cmd *cmd;
+	struct sk_buff *skb;
+
+	if (id == WMI_PDEV_PARAM_UNSUPPORTED) {
+		ath10k_warn(ar, "fwtest param %d not supported by firmware\n",
+			    id);
+		return ERR_PTR(-EOPNOTSUPP);
+	}
+
+	skb = ath10k_wmi_alloc_skb(ar, sizeof(*cmd));
+	if (!skb)
+		return ERR_PTR(-ENOMEM);
+
+	cmd = (struct wmi_fwtest_set_param_cmd *)skb->data;
+	cmd->param_id    = __cpu_to_le32(id);
+	cmd->param_value = __cpu_to_le32(value);
+
+	ath10k_dbg(ar, ATH10K_DBG_WMI, "wmi fwtest set param %d value %d\n",
+		   id, value);
+	return skb;
+}
+
 void ath10k_wmi_put_host_mem_chunks(struct ath10k *ar,
 				    struct wmi_host_mem_chunks *chunks)
 {
@@ -8710,6 +8736,7 @@ static const struct wmi_ops wmi_10_4_ops = {
 	.gen_pdev_resume = ath10k_wmi_op_gen_pdev_resume,
 	.gen_pdev_set_rd = ath10k_wmi_10x_op_gen_pdev_set_rd,
 	.gen_pdev_set_param = ath10k_wmi_op_gen_pdev_set_param,
+	.gen_pdev_set_fwtest = ath10k_wmi_op_gen_pdev_set_fwtest,
 	.gen_init = ath10k_wmi_10_4_op_gen_init,
 	.gen_start_scan = ath10k_wmi_op_gen_start_scan,
 	.gen_stop_scan = ath10k_wmi_op_gen_stop_scan,
