@@ -3154,8 +3154,15 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 	 * won't survive through firmware reboots, etc.
 	 */
 
-	/* Send it to the firmware. */
-	ret = ath10k_wmi_pdev_set_special(ar, id, val);
+	if ((id & 0xFF0000) == 0xFF0000) {
+		/* Send it to the firmware through the fwtest (stock-ish) API */
+		/* Search for WMI_FWTEST_CMDID in core.c */
+		ret = ath10k_wmi_pdev_set_fwtest(ar, id & 0xFFFF, val);
+	}
+	else {
+		/* Send it to the firmware though ct-special API */
+		ret = ath10k_wmi_pdev_set_special(ar, id, val);
+	}
 unlock:
 	mutex_unlock(&ar->conf_mutex);
 
