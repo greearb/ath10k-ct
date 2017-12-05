@@ -1106,6 +1106,7 @@ struct ath10k {
 	u32 skid_limit;
 	u32 bmiss_offload_max_vdev;
 	int eeprom_regdom;
+	bool eeprom_regdom_warned;
 
 	struct work_struct svc_rdy_work;
 	struct sk_buff *svc_rdy_skb;

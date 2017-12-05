@@ -3749,6 +3749,10 @@ static void ath10k_reg_notifier(struct wiphy *wiphy,
 	struct ath10k *ar = hw->priv;
 	bool result;
 
+	/*ath10k_info(ar, "ath10k-reg-notifier, DFS-certified: %d,  dfs-detector: %p current-rd: %d  reg-addr: %p\n",
+		    IS_ENABLED(CONFIG_ATH10K_DFS_CERTIFIED), ar->dfs_detector,
+		    ar->ath_common.regulatory.current_rd, &ar->ath_common.regulatory);*/
+
 	ath_reg_notifier_apply(wiphy, request, &ar->ath_common.regulatory);
 
 	if (IS_ENABLED(CONFIG_ATH10K_DFS_CERTIFIED) && ar->dfs_detector) {
@@ -8956,7 +8960,22 @@ static int ath10k_mac_init_rd(struct ath10k *ar)
 		rd = ar->hw_eeprom_rd;
 	}
 
-	ar->ath_common.regulatory.current_rd = rd;
+	if ((ar->eeprom_regdom != -1) &&
+	    (ar->eeprom_regdom != rd)) {
+		if (!ar->eeprom_regdom_warned) {
+			ath10k_err(ar, "DANGER! You're overriding EEPROM-defined regulatory domain\n");
+			ath10k_err(ar, "from: 0x%x to 0x%x (mac-init-rd)\n",
+				   rd, ar->eeprom_regdom);
+			ath10k_err(ar, "Your card was not certified to operate in the domain you chose.\n");
+			ath10k_err(ar, "This might result in a violation of your local regulatory rules.\n");
+			ath10k_err(ar, "Do not ever do this unless you really know what you are doing!\n");
+			ar->eeprom_regdom_warned = 1;
+		}
+		ar->ath_common.regulatory.current_rd = ar->eeprom_regdom | COUNTRY_ERD_FLAG;
+	}
+	else {
+		ar->ath_common.regulatory.current_rd = rd;
+	}
 	return 0;
 }
 
@@ -9301,6 +9320,7 @@ int ath10k_mac_register(struct ath10k *ar)
 	if (!ar->hw_params.hw_ops->set_coverage_class)
 		ar->ops->set_coverage_class = NULL;
 
+	/*ath10k_err(ar, "Calling ath_regd_init, current-rd: %d\n", ar->ath_common.regulatory.current_rd);*/
 	ret = ath_regd_init(&ar->ath_common.regulatory, ar->hw->wiphy,
 			    ath10k_reg_notifier);
 	if (ret) {

@@ -640,6 +640,16 @@ enum ath10k_fw_features {
 	 */
 	ATH10K_FW_FEATURE_SKIP_NULL_FUNC_WAR = 15,
 
+	/* Firmware allow other BSS mesh broadcast/multicast frames without
+	 * creating monitor interface. Appropriate rxfilters are programmed for
+	 * mesh vdev by firmware itself. This feature flags will be used for
+	 * not creating monitor vdev while configuring mesh node.
+	 */
+	ATH10K_FW_FEATURE_ALLOWS_MESH_BCAST = 16,
+
+	/* Firmware does not support power save in station mode. */
+	ATH10K_FW_FEATURE_NO_PS = 17,
+
 	/* tx-status has the noack bits (CT firmware version 14 and higher ) */
 	ATH10K_FW_FEATURE_HAS_TXSTATUS_NOACK = 30,
 
@@ -1052,6 +1062,7 @@ struct ath10k {
 	u32 skid_limit;
 	u32 bmiss_offload_max_vdev;
 	int eeprom_regdom;
+	bool eeprom_regdom_warned;
 
 	struct work_struct svc_rdy_work;
 	struct sk_buff *svc_rdy_skb;
@@ -1140,6 +1151,8 @@ struct ath10k {
 		u8 tx_sta_bw_mask; /* 0:  all, 0x1: 20Mhz, 0x2 40Mhz, 0x4 80Mhz */
 		bool allow_ibss_amsdu;
 		bool rifs_enable_override;
+		bool txbf_cv_msg;
+		bool rx_all_mgt;
 #define CT_DISABLE_20MHZ  0x1
 #define CT_DISABLE_40MHZ  0x2
 #define CT_DISABLE_80MHZ  0x4
@@ -1155,6 +1168,8 @@ struct ath10k {
 					  */
 		u32 ct_pshack;
 		u32 ct_csi;
+		u32 mu_sounding_timer_ms;
+		u32 su_sounding_timer_ms;
 	} eeprom_overrides;
 
 	/* must be last */

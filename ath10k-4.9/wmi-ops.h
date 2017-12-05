@@ -62,6 +62,8 @@ struct wmi_ops {
 					   enum wmi_dfs_region dfs_reg);
 	struct sk_buff *(*gen_pdev_set_param)(struct ath10k *ar, u32 id,
 					      u32 value);
+	struct sk_buff *(*gen_pdev_set_fwtest)(struct ath10k *ar, u32 id,
+					       u32 value);
 	struct sk_buff *(*gen_init)(struct ath10k *ar);
 	struct sk_buff *(*gen_start_scan)(struct ath10k *ar,
 					  const struct wmi_start_scan_arg *arg);
@@ -459,6 +461,21 @@ ath10k_wmi_pdev_set_param(struct ath10k *ar, u32 id, u32 value)
 		return PTR_ERR(skb);
 
 	return ath10k_wmi_cmd_send(ar, skb, ar->wmi.cmd->pdev_set_param_cmdid);
+}
+
+static inline int
+ath10k_wmi_pdev_set_fwtest(struct ath10k *ar, u32 id, u32 value)
+{
+	struct sk_buff *skb;
+
+	if (!ar->wmi.ops->gen_pdev_set_fwtest)
+		return -EOPNOTSUPP;
+
+	skb = ar->wmi.ops->gen_pdev_set_fwtest(ar, id, value);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
+
+	return ath10k_wmi_cmd_send(ar, skb, ar->wmi.cmd->fwtest_cmdid);
 }
 
 static inline int

@@ -330,6 +330,8 @@ static const char *const ath10k_core_fw_feature_str[] = {
 	[ATH10K_FW_FEATURE_PEER_FLOW_CONTROL] = "peer-flow-ctrl",
 	[ATH10K_FW_FEATURE_BTCOEX_PARAM] = "btcoex-param",
 	[ATH10K_FW_FEATURE_SKIP_NULL_FUNC_WAR] = "skip-null-func-war",
+	[ATH10K_FW_FEATURE_ALLOWS_MESH_BCAST] = "allows-mesh-bcast",
+	[ATH10K_FW_FEATURE_NO_PS] = "no-ps",
 	[ATH10K_FW_FEATURE_WMI_10X_CT] = "wmi-10.x-CT",
 	[ATH10K_FW_FEATURE_CT_RXSWCRYPT] = "rxswcrypt-CT",
 	[ATH10K_FW_FEATURE_HAS_TXSTATUS_NOACK] = "txstatus-noack",
@@ -1861,7 +1863,7 @@ static int ath10k_download_cal_data(struct ath10k *ar)
 
 	ret = ath10k_download_and_run_otp(ar);
 	if (ret) {
-		ath10k_err(ar, "failed to run otp: %d\n", ret);
+		ath10k_err(ar, "failed to run otp: %d (download-cal-data)\n", ret);
 		return ret;
 	}
 
@@ -2613,9 +2615,25 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		if (ar->eeprom_overrides.rate_bw_disable_mask)
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_BW_DISABLE_MASK,
 						    ar->eeprom_overrides.rate_bw_disable_mask);
+		if (ar->eeprom_overrides.txbf_cv_msg)
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_TXBF_CV_MSG,
+						    ar->eeprom_overrides.txbf_cv_msg);
+		if (ar->eeprom_overrides.rx_all_mgt)
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_RX_ALL_MGT,
+						    ar->eeprom_overrides.rx_all_mgt);
 		if (ar->eeprom_overrides.tx_debug)
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_TX_DBG,
 						    ar->eeprom_overrides.tx_debug);
+
+		if (ar->eeprom_overrides.su_sounding_timer_ms)
+			ath10k_wmi_pdev_set_param(ar, ar->wmi.pdev_param->txbf_sound_period_cmdid,
+						  ar->eeprom_overrides.su_sounding_timer_ms);
+
+		/* See WMI_FWTEST_CMDID in wlan_dev.c in firmware for these hard-coded values. */
+		/* Set default MU sounding period. */
+		if (ar->eeprom_overrides.mu_sounding_timer_ms)
+			ath10k_wmi_pdev_set_fwtest(ar, 81,
+						   ar->eeprom_overrides.mu_sounding_timer_ms);
 	}
 
 	return 0;

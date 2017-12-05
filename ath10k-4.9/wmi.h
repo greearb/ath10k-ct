@@ -1143,13 +1143,13 @@ enum wmi_10x_cmd_id {
 	WMI_10X_PDEV_PKTLOG_ENABLE_CMDID,
 	WMI_10X_PDEV_PKTLOG_DISABLE_CMDID,
 	WMI_10X_PDEV_SET_WMM_PARAMS_CMDID,
-	WMI_10X_PDEV_SET_HT_CAP_IE_CMDID,
+	WMI_10X_PDEV_SET_HT_CAP_IE_CMDID, /* 10 */
 	WMI_10X_PDEV_SET_VHT_CAP_IE_CMDID,
 	WMI_10X_PDEV_SET_BASE_MACADDR_CMDID,
 	WMI_10X_PDEV_SET_DSCP_TID_MAP_CMDID,
 	WMI_10X_PDEV_SET_QUIET_MODE_CMDID,
 	WMI_10X_PDEV_GREEN_AP_PS_ENABLE_CMDID,
-	WMI_10X_PDEV_GET_TPC_CONFIG_CMDID,
+	WMI_10X_PDEV_GET_TPC_CONFIG_CMDID, /* 16 */
 
 	/* VDEV(virtual device) specific commands */
 	WMI_10X_VDEV_CREATE_CMDID,
@@ -1162,7 +1162,7 @@ enum wmi_10x_cmd_id {
 	WMI_10X_VDEV_STANDBY_RESPONSE_CMDID,
 	WMI_10X_VDEV_RESUME_RESPONSE_CMDID,
 	WMI_10X_VDEV_SET_PARAM_CMDID,
-	WMI_10X_VDEV_INSTALL_KEY_CMDID,
+	WMI_10X_VDEV_INSTALL_KEY_CMDID, /* 27 */
 
 	/* peer specific commands */
 	WMI_10X_PEER_CREATE_CMDID,
@@ -1172,7 +1172,7 @@ enum wmi_10x_cmd_id {
 	WMI_10X_PEER_ASSOC_CMDID,
 	WMI_10X_PEER_ADD_WDS_ENTRY_CMDID,
 	WMI_10X_PEER_REMOVE_WDS_ENTRY_CMDID,
-	WMI_10X_PEER_MCAST_GROUP_CMDID,
+	WMI_10X_PEER_MCAST_GROUP_CMDID, /* 35 */
 
 	/* beacon/management specific commands */
 
@@ -1180,7 +1180,7 @@ enum wmi_10x_cmd_id {
 	WMI_10X_BCN_PRB_TMPL_CMDID,
 	WMI_10X_BCN_FILTER_RX_CMDID,
 	WMI_10X_PRB_REQ_FILTER_RX_CMDID,
-	WMI_10X_MGMT_TX_CMDID,
+	WMI_10X_MGMT_TX_CMDID, /* 40 */
 
 	/* commands to directly control ba negotiation directly from host. */
 	WMI_10X_ADDBA_CLEAR_RESP_CMDID,
@@ -5174,7 +5174,8 @@ enum wmi_10_4_vdev_param {
 #define WMI_VDEV_PARAM_TXBF_MU_TX_BFER BIT(3)
 
 #define WMI_TXBF_STS_CAP_OFFSET_LSB	4
-#define WMI_TXBF_STS_CAP_OFFSET_MASK	0xf0
+#define WMI_TXBF_STS_CAP_OFFSET_MASK	0x70
+#define WMI_TXBF_CONF_IMPLICIT_BF       BIT(7)
 #define WMI_BF_SOUND_DIM_OFFSET_LSB	8
 #define WMI_BF_SOUND_DIM_OFFSET_MASK	0xf00
 
@@ -6609,6 +6610,9 @@ struct wmi_pdev_set_special_cmd {
 #define SET_SPECIAL_ID_CSI            0xD /* 0 == disable, else enable reporting CSI data.  10.4 FW only at this time. */
 #define SET_SPECIAL_ID_BW_DISABLE_MASK 0xE /* 0x1 == disable 20Mhz, 0x2 == 40Mhz, 0x4 == 80Mhz, 0x8 == 160Mhz.  0x0 == default */
 #define SET_SPECIAL_ID_TXBF_CV_MSG     0xF /* 0x1 == enable, 0x0 == disable (default). */
+#define SET_SPECIAL_ID_RX_ALL_MGT     0x10 /* Pass all possible mgt frames up to the host
+                                            * 0x1 == enable, 0x0 == disable (default)
+                                            */
 
 /* Requires specially compiled firmware (-T option) to have any useful effect. */
 #define SET_SPECIAL_ID_TX_DBG         0x99 /* 0x1 == enable, 0x2 == pkt-dbg, 0x0 == disable (default). */
@@ -6626,6 +6630,16 @@ struct wmi_pdev_set_special_cmd {
     __le32 extra2;
 };
 int ath10k_wmi_pdev_set_special(struct ath10k *ar, u32 id, u32 val);
+
+/* Back door pdev hack API for 10.4 firmware.
+ * Similar to CT firmware's set-special API it seems.
+ */
+struct wmi_fwtest_set_param_cmd {
+    /** parameter id   */
+    __le32 param_id;
+    /** parameter value */
+    __le32 param_value;
+};
 
 /* WOW structures */
 enum wmi_wow_wakeup_event {

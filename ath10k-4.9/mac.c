@@ -3665,6 +3665,10 @@ static void ath10k_reg_notifier(struct wiphy *wiphy,
 	struct ath10k *ar = hw->priv;
 	bool result;
 
+	/*ath10k_info(ar, "ath10k-reg-notifier, DFS-certified: %d,  dfs-detector: %p current-rd: %d  reg-addr: %p\n",
+		    IS_ENABLED(CONFIG_ATH10K_DFS_CERTIFIED), ar->dfs_detector,
+		    ar->ath_common.regulatory.current_rd, &ar->ath_common.regulatory);*/
+
 	ath_reg_notifier_apply(wiphy, request, &ar->ath_common.regulatory);
 
 	if (IS_ENABLED(CONFIG_ATH10K_DFS_CERTIFIED) && ar->dfs_detector) {
@@ -8784,6 +8788,7 @@ int ath10k_copy_comb(struct ath10k* ar,
 
 	ar->hw->wiphy->iface_combinations = ar->if_comb;
 	ar->hw->wiphy->n_iface_combinations = array_len;
+
 	return 0;
 }
 
@@ -9084,6 +9089,7 @@ int ath10k_mac_register(struct ath10k *ar)
 		      ar->running_fw->fw_file.fw_features))
 		ar->ops->wake_tx_queue = NULL;
 
+	/*ath10k_err(ar, "Calling ath_regd_init, current-rd: %d\n", ar->ath_common.regulatory.current_rd);*/
 	ret = ath_regd_init(&ar->ath_common.regulatory, ar->hw->wiphy,
 			    ath10k_reg_notifier);
 	if (ret) {

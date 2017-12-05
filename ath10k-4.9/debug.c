@@ -3021,6 +3021,18 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		ath10k_warn(ar, "Setting pdev rate-bw-disable-mask to 0x%x.  Will take effect next time rates are configured.\n",
 			    val);
 	}
+	else if (id == SET_SPECIAL_ID_TXBF_CV_MSG) {
+		ar->eeprom_overrides.txbf_cv_msg = val;
+
+		ath10k_warn(ar, "Setting pdev txbf-cv-msg to 0x%x.\n",
+			    val);
+	}
+	else if (id == SET_SPECIAL_ID_RX_ALL_MGT) {
+		ar->eeprom_overrides.rx_all_mgt = val;
+
+		ath10k_warn(ar, "Setting pdev rx-all-mgt to 0x%x.\n",
+			    val);
+	}
 	else if (id == SET_SPECIAL_ID_TX_DBG) {
 		/* Set TX debugging */
 		ar->eeprom_overrides.tx_debug = val;
@@ -3038,12 +3050,42 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		ath10k_mac_set_pdev_kickout(ar);
 		goto unlock;
 	}
+	else if (id == 0x1002) {
+		/* Set SU sounding frame timer. */
+		ar->eeprom_overrides.su_sounding_timer_ms = val;
+
+		ath10k_warn(ar, "Setting pdev su-sounding-timer-ms to 0x%x\n",
+			    val);
+
+		ath10k_wmi_pdev_set_param(ar, ar->wmi.pdev_param->txbf_sound_period_cmdid,
+					  ar->eeprom_overrides.su_sounding_timer_ms);
+		goto unlock;
+	}
+	else if (id == 0x1003) {
+		/* Set MU sounding frame timer. */
+		ar->eeprom_overrides.mu_sounding_timer_ms = val;
+
+		ath10k_warn(ar, "Setting pdev mu-sounding-timer-ms to 0x%x\n",
+			    val);
+
+		/* Search for WMI_FWTEST_CMDID in core.c */
+		ath10k_wmi_pdev_set_fwtest(ar, 81,
+					  ar->eeprom_overrides.mu_sounding_timer_ms);
+		goto unlock;
+	}
 	/* else, pass it through to firmware...but will not be stored locally, so
 	 * won't survive through firmware reboots, etc.
 	 */
 
-	/* Send it to the firmware. */
-	ret = ath10k_wmi_pdev_set_special(ar, id, val);
+	if ((id & 0xFF0000) == 0xFF0000) {
+		/* Send it to the firmware through the fwtest (stock-ish) API */
+		/* Search for WMI_FWTEST_CMDID in core.c */
+		ret = ath10k_wmi_pdev_set_fwtest(ar, id & 0xFFFF, val);
+	}
+	else {
+		/* Send it to the firmware though ct-special API */
+		ret = ath10k_wmi_pdev_set_special(ar, id, val);
+	}
 unlock:
 	mutex_unlock(&ar->conf_mutex);
 
@@ -3082,8 +3124,10 @@ static ssize_t ath10k_read_ct_special(struct file *file,
 		"id: 0xD Enable CSI reporting for at least probe requests.\n"
 		"id: 0xE set rate-bandwidth-disable-mask: 20Mhz 0x1, 40Mhz 0x2, 80Mhz 0x4, 160Mhz 0x8.\n"
 		"    Takes effect next time rates are set.  Set to 0x0 for default rates.\n"
-		"\nBelow here are not actually sent to firmware directly, but configure the driver.\n"
+		"\nBelow here should work with most firmware, including non-CT firmware.\n"
 		"id: 0x1001 set sta-kickout threshold due to tx-failures (0 means disable.  Default is 20 * 16.)\n"
+		"id: 0x1002 set su-sounding-timer-ms (0 means use defaults next FW reload.  Default is 100, max is 500)\n"
+		"id: 0x1003 set mu-sounding-timer-ms (0 means use defaults next FW reload.  Default is 40)\n"
 		"\n";
 
 	return simple_read_from_buffer(user_buf, count, ppos, buf, strlen(buf));

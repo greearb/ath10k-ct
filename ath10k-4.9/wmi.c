@@ -1849,7 +1849,7 @@ static void ath10k_wmi_op_ep_tx_credits(struct ath10k *ar)
 int ath10k_wmi_cmd_send(struct ath10k *ar, struct sk_buff *skb, u32 cmd_id)
 {
 	int ret = -EOPNOTSUPP;
-	int retry = 1000;
+	int loops = 0;
 
 	might_sleep();
 
@@ -1861,22 +1861,14 @@ int ath10k_wmi_cmd_send(struct ath10k *ar, struct sk_buff *skb, u32 cmd_id)
 	}
 
 	wait_event_timeout(ar->wmi.tx_credits_wq, ({
-		/* try to send pending beacons first. they take priority */
-		ath10k_wmi_tx_beacons_nowait(ar);
-
-		while (--retry) {
-			ret = ath10k_wmi_cmd_send_nowait(ar, skb, cmd_id);
-			if ((ret == -ENOBUFS) &&
-			    !test_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags)) {
-				/* CE transport logic is full, maybe we cannot reap entries fast
-				 * enough?
-				 */
-				ath10k_err(ar, "CE transport is full, sleeping for 1ms\n");
-				msleep(1);
-				continue;
-			}
-			break;
+		if (loops++ == 0) {
+			/* try to send pending beacons first. they take priority.  But, only
+			 * the first time through this loop. --Ben
+			 */
+			ath10k_wmi_tx_beacons_nowait(ar);
 		}
+
+		ret = ath10k_wmi_cmd_send_nowait(ar, skb, cmd_id);
 
 		if (ret && test_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags))
 			ret = -ESHUTDOWN;
@@ -2672,6 +2664,8 @@ int ath10k_wmi_event_csi_mesg(struct ath10k *ar, struct sk_buff *skb)
 	ibuf = (__le32*)(skb->data);
 	len = skb->len / 4;
 
+	/* This is quite noisy, need a better way to get this to user-space. */
+	/* This is the CFR data, channel-frequency-response */
 	dev_printk(lvl, ar->dev, "ath10k_pci ATH10K_CSI_BUFFER:\n");
 	while (q < len) {
 		if (q + 8 <= len) {
@@ -4912,15 +4906,14 @@ static void ath10k_wmi_event_service_ready_work(struct work_struct *work)
 
 	if ((ar->eeprom_regdom != -1) &&
 	    (ar->eeprom_regdom != ar->ath_common.regulatory.current_rd)) {
-		static int do_once = 1;
-		if (do_once) {
-			ath10k_err(ar, "DANGER! You're overriding EEPROM-defined regulatory domain,"
-				   "\nfrom: 0x%x to 0x%x\n",
+		if (!ar->eeprom_regdom_warned) {
+			ath10k_err(ar, "DANGER! You're overriding EEPROM-defined regulatory domain\n");
+			ath10k_err(ar, "from: 0x%x to 0x%x (svc-ready-work)\n",
 				   ar->ath_common.regulatory.current_rd, ar->eeprom_regdom);
 			ath10k_err(ar, "Your card was not certified to operate in the domain you chose.\n");
 			ath10k_err(ar, "This might result in a violation of your local regulatory rules.\n");
 			ath10k_err(ar, "Do not ever do this unless you really know what you are doing!\n");
-			do_once = 0;
+			ar->eeprom_regdom_warned = 1;
 		}
 		ar->ath_common.regulatory.current_rd = ar->eeprom_regdom | COUNTRY_ERD_FLAG;
 	}
@@ -5795,6 +5788,31 @@ ath10k_wmi_op_gen_pdev_set_param(struct ath10k *ar, u32 id, u32 value)
 	cmd->param_value = __cpu_to_le32(value);
 
 	ath10k_dbg(ar, ATH10K_DBG_WMI, "wmi pdev set param %d value %d\n",
+		   id, value);
+	return skb;
+}
+
+static struct sk_buff *
+ath10k_wmi_op_gen_pdev_set_fwtest(struct ath10k *ar, u32 id, u32 value)
+{
+	struct wmi_fwtest_set_param_cmd *cmd;
+	struct sk_buff *skb;
+
+	if (id == WMI_PDEV_PARAM_UNSUPPORTED) {
+		ath10k_warn(ar, "fwtest param %d not supported by firmware\n",
+			    id);
+		return ERR_PTR(-EOPNOTSUPP);
+	}
+
+	skb = ath10k_wmi_alloc_skb(ar, sizeof(*cmd));
+	if (!skb)
+		return ERR_PTR(-ENOMEM);
+
+	cmd = (struct wmi_fwtest_set_param_cmd *)skb->data;
+	cmd->param_id    = __cpu_to_le32(id);
+	cmd->param_value = __cpu_to_le32(value);
+
+	ath10k_dbg(ar, ATH10K_DBG_WMI, "wmi fwtest set param %d value %d\n",
 		   id, value);
 	return skb;
 }
@@ -6872,6 +6890,12 @@ ath10k_wmi_op_gen_peer_delete(struct ath10k *ar, u32 vdev_id,
 	cmd = (struct wmi_peer_delete_cmd *)skb->data;
 	cmd->vdev_id = __cpu_to_le32(vdev_id);
 	ether_addr_copy(cmd->peer_macaddr.addr, peer_addr);
+
+	/* Steal a high bit.  Stock firmware should ignore it,
+	 * CT 10.1 (at least) firmware built after Nov 29 will
+	 * pay attention and flush if requested.
+	 */
+	cmd->peer_macaddr.word1 |= __cpu_to_le32(0x80000000);
 
 	ath10k_dbg(ar, ATH10K_DBG_WMI,
 		   "wmi peer delete vdev_id %d peer_addr %pM\n",
@@ -8629,6 +8653,7 @@ static const struct wmi_ops wmi_10_4_ops = {
 	.gen_pdev_resume = ath10k_wmi_op_gen_pdev_resume,
 	.gen_pdev_set_rd = ath10k_wmi_10x_op_gen_pdev_set_rd,
 	.gen_pdev_set_param = ath10k_wmi_op_gen_pdev_set_param,
+	.gen_pdev_set_fwtest = ath10k_wmi_op_gen_pdev_set_fwtest,
 	.gen_init = ath10k_wmi_10_4_op_gen_init,
 	.gen_start_scan = ath10k_wmi_op_gen_start_scan,
 	.gen_stop_scan = ath10k_wmi_op_gen_stop_scan,
