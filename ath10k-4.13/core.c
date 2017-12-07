@@ -2785,6 +2785,10 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		if (ar->eeprom_overrides.mu_sounding_timer_ms)
 			ath10k_wmi_pdev_set_fwtest(ar, 81,
 						   ar->eeprom_overrides.mu_sounding_timer_ms);
+
+		if (ar->eeprom_overrides.rc_txbf_probe)
+			ath10k_wmi_pdev_set_fwtest(ar, 20,
+						   ar->eeprom_overrides.rc_txbf_probe);
 	}
 
 	return 0;

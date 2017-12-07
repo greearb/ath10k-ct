@@ -1213,6 +1213,7 @@ struct ath10k {
 		bool coverage_already_set;
 		bool txbf_cv_msg;
 		bool rx_all_mgt;
+		bool rc_txbf_probe;
 #define CT_DISABLE_20MHZ  0x1
 #define CT_DISABLE_40MHZ  0x2
 #define CT_DISABLE_80MHZ  0x4

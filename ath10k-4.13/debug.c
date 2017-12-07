@@ -3150,6 +3150,18 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 					  ar->eeprom_overrides.mu_sounding_timer_ms);
 		goto unlock;
 	}
+	else if (id == 0x1004) {
+		/* Set rc-txbf-probe. */
+		ar->eeprom_overrides.rc_txbf_probe = val;
+
+		ath10k_warn(ar, "Setting pdev rc-txbf-probe to 0x%x\n",
+			    val);
+
+		/* Search for WMI_FWTEST_CMDID in core.c */
+		ath10k_wmi_pdev_set_fwtest(ar, 20,
+					  ar->eeprom_overrides.rc_txbf_probe);
+		goto unlock;
+	}
 	/* else, pass it through to firmware...but will not be stored locally, so
 	 * won't survive through firmware reboots, etc.
 	 */
@@ -3173,7 +3185,7 @@ static ssize_t ath10k_read_ct_special(struct file *file,
 				      char __user *user_buf,
 				      size_t count, loff_t *ppos)
 {
-	const char buf[] =
+	static const char buf[] =
 		"BE WARNED:  You should understand the values before setting anything here.\n"
 		"You could put your NIC out of spec or maybe even break the hardware if you\n"
 		"put in bad values.\n\n"
@@ -3205,6 +3217,7 @@ static ssize_t ath10k_read_ct_special(struct file *file,
 		"id: 0x1001 set sta-kickout threshold due to tx-failures (0 means disable.  Default is 20 * 16.)\n"
 		"id: 0x1002 set su-sounding-timer-ms (0 means use defaults next FW reload.  Default is 100, max is 500)\n"
 		"id: 0x1003 set mu-sounding-timer-ms (0 means use defaults next FW reload.  Default is 40)\n"
+		"id: 0x1004 set rc-txbf-probe (1 means sent txbf probe, 0 (default) means do not\n"
 		"\n";
 
 	return simple_read_from_buffer(user_buf, count, ppos, buf, strlen(buf));
