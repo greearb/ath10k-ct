@@ -748,6 +748,11 @@ enum ath10k_fw_features {
 	 */
 	ATH10K_FW_FEATURE_HAS_GET_TEMP_CT = 44,
 
+	/* Can peer-id be over-ridden to provide rix + retries for raw pkts?
+	 *  CT only option.
+	 */
+	ATH10K_FW_FEATURE_HAS_TX_RC_CT = 45,
+
 	/* keep last */
 	ATH10K_FW_FEATURE_COUNT,
 };

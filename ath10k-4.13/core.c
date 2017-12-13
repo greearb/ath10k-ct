@@ -399,6 +399,7 @@ static const char *const ath10k_core_fw_feature_str[] = {
 	[ATH10K_FW_FEATURE_SET_SPECIAL_CT] = "set-special-CT",
 	[ATH10K_FW_FEATURE_NO_BMISS_CT] = "no-bmiss-CT",
 	[ATH10K_FW_FEATURE_HAS_GET_TEMP_CT] = "get-temp-CT",
+	[ATH10K_FW_FEATURE_HAS_TX_RC_CT] = "tx-rc-CT",
 };
 
 static unsigned int ath10k_core_get_fw_feature_str(char *buf,

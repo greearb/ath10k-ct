@@ -3328,7 +3328,7 @@ static void ath10k_bss_disassoc(struct ieee80211_hw *hw,
 /* Convert hw_rate from ratectrl to 'rate-code' that firmware
  * can understand.
  */
-static u8 ath10k_convert_hw_rate_to_rc(u8 hw_rate, int bitrate)
+u8 ath10k_convert_hw_rate_to_rc(u8 hw_rate, int bitrate)
 {
 	int preamble;
 	if (ath10k_mac_bitrate_is_cck(bitrate))
