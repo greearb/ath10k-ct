@@ -289,6 +289,11 @@ struct ath10k_fw_stats_pdev {
 	s32 mpdu_errs;
 	s32 rx_ovfl_errs;
 	s32 rx_timeout_errs;
+
+	/* Other PDEV stats */
+	s32 dram_free;
+	s32 iram_free;
+	s32 sram_free;
 };
 
 struct ath10k_fw_stats {

@@ -4416,6 +4416,12 @@ struct wmi_pdev_stats_mem {
 	__le32 iram_free;
 } __packed;
 
+struct wmi_pdev_stats_mem_10_4 {
+	__le32 iram_free;
+	__le32 dram_free;
+	__le32 sram_free;
+} __packed;
+
 struct wmi_10_2_pdev_stats {
 	struct wmi_pdev_stats_base base;
 	struct wmi_pdev_stats_tx tx;
@@ -4433,8 +4439,7 @@ struct wmi_10_4_pdev_stats {
 	struct wmi_pdev_stats_rx rx;
 	__le32 pdev_rx_timeout;
 	__le32 rx_ovfl_errs;
-	struct wmi_pdev_stats_mem mem;
-	__le32 sram_free_size;
+	struct wmi_pdev_stats_mem_10_4 mem;
 	struct wmi_pdev_stats_extra extra;
 } __packed;
 

@@ -3065,6 +3065,9 @@ static int ath10k_wmi_10_2_4_op_pull_fw_stats(struct ath10k *ar,
 		ath10k_wmi_pull_pdev_stats_base(&src->base, dst);
 		ath10k_wmi_pull_pdev_stats_tx(&src->tx, dst);
 		ath10k_wmi_pull_pdev_stats_rx(&src->rx, dst);
+		dst->rx_timeout_errs = __le32_to_cpu(src->pdev_rx_timeout);
+		dst->dram_free = __le32_to_cpu(src->mem.dram_free);
+		dst->iram_free = __le32_to_cpu(src->mem.iram_free);
 		ath10k_wmi_pull_pdev_stats_extra(&src->extra, dst);
 		/* FIXME: expose 10.2 specific values */
 
@@ -3157,6 +3160,9 @@ static int ath10k_wmi_10_4_op_pull_fw_stats(struct ath10k *ar,
 		ath10k_wmi_pull_pdev_stats_rx(&src->rx, dst);
 		dst->rx_timeout_errs = __le32_to_cpu(src->pdev_rx_timeout);
 		dst->rx_ovfl_errs = __le32_to_cpu(src->rx_ovfl_errs);
+		dst->dram_free = __le32_to_cpu(src->mem.dram_free);
+		dst->iram_free = __le32_to_cpu(src->mem.iram_free);
+		dst->sram_free = __le32_to_cpu(src->mem.sram_free);
 		ath10k_wmi_pull_pdev_stats_extra(&src->extra, dst);
 
 		list_add_tail(&dst->list, &stats->pdevs);
@@ -7988,6 +7994,13 @@ void ath10k_wmi_10_4_op_fw_stats_fill(struct ath10k *ar,
 			"Num Rx Timeout errors", pdev->rx_timeout_errs);
 	len += scnprintf(buf + len, buf_len - len, "%30s %10d\n",
 			"Num Rx Overflow errors", pdev->rx_ovfl_errs);
+
+	len += scnprintf(buf + len, buf_len - len, "%30s %10d\n",
+			 "DRAM Free", pdev->dram_free);
+	len += scnprintf(buf + len, buf_len - len, "%30s %10d\n",
+			 "IRAM Free", pdev->iram_free);
+	len += scnprintf(buf + len, buf_len - len, "%30s %10d\n",
+			 "SRAM Free", pdev->sram_free);
 
 	len += scnprintf(buf + len, buf_len - len, "\n");
 	len += scnprintf(buf + len, buf_len - len, "%30s (%zu)\n",
