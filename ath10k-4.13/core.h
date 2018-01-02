@@ -288,6 +288,7 @@ struct ath10k_fw_stats_pdev {
 	s32 phy_err_drop;
 	s32 mpdu_errs;
 	s32 rx_ovfl_errs;
+	s32 rx_timeout_errs;
 };
 
 struct ath10k_fw_stats {

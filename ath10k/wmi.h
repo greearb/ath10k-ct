@@ -4421,6 +4421,7 @@ struct wmi_10_4_pdev_stats {
 	struct wmi_pdev_stats_base base;
 	struct wmi_10_4_pdev_stats_tx tx;
 	struct wmi_pdev_stats_rx rx;
+	__le32 pdev_rx_timeout;
 	__le32 rx_ovfl_errs;
 	struct wmi_pdev_stats_mem mem;
 	__le32 sram_free_size;

@@ -3217,6 +3217,7 @@ static int ath10k_wmi_10_4_op_pull_fw_stats(struct ath10k *ar,
 		ath10k_wmi_pull_pdev_stats_base(&src->base, dst);
 		ath10k_wmi_10_4_pull_pdev_stats_tx(&src->tx, dst);
 		ath10k_wmi_pull_pdev_stats_rx(&src->rx, dst);
+		dst->rx_timeout_errs = __le32_to_cpu(src->pdev_rx_timeout);
 		dst->rx_ovfl_errs = __le32_to_cpu(src->rx_ovfl_errs);
 		ath10k_wmi_pull_pdev_stats_extra(&src->extra, dst);
 
@@ -3859,9 +3860,9 @@ static void ath10k_dfs_radar_report(struct ath10k *ar,
 		   MS(reg1, RADAR_REPORT_REG1_PULSE_AGC_MB_GAIN),
 		   MS(reg1, RADAR_REPORT_REG1_PULSE_SUBCHAN_MASK));
 	ath10k_dbg(ar, ATH10K_DBG_REGULATORY,
-		   "wmi phyerr radar report pulse_tsf_offset 0x%X pulse_dur: %d\n",
+		   "wmi phyerr radar report pulse_tsf_offset 0x%X pulse_dur: %d dfs-detector: %p\n",
 		   MS(reg1, RADAR_REPORT_REG1_PULSE_TSF_OFFSET),
-		   MS(reg1, RADAR_REPORT_REG1_PULSE_DUR));
+		   MS(reg1, RADAR_REPORT_REG1_PULSE_DUR), ar->dfs_detector);
 
 	if (!ar->dfs_detector)
 		return;
@@ -3900,8 +3901,8 @@ static void ath10k_dfs_radar_report(struct ath10k *ar,
 	pe.rssi = rssi;
 	pe.chirp = (MS(reg0, RADAR_REPORT_REG0_PULSE_IS_CHIRP) != 0);
 	ath10k_dbg(ar, ATH10K_DBG_REGULATORY,
-		   "dfs add pulse freq: %d, width: %d, rssi %d, tsf: %llX\n",
-		   pe.freq, pe.width, pe.rssi, pe.ts);
+		   "dfs add pulse freq: %d, width: %d, rssi %d, tsf: %llX chirp: %d\n",
+		   pe.freq, pe.width, pe.rssi, pe.ts, pe.chirp);
 
 	ATH10K_DFS_STAT_INC(ar, pulses_detected);
 
@@ -8243,6 +8244,8 @@ void ath10k_wmi_10_4_op_fw_stats_fill(struct ath10k *ar,
 			"MPDUs expired", pdev->mpdus_expired);
 
 	ath10k_wmi_fw_pdev_rx_stats_fill(pdev, buf, &len);
+	len += scnprintf(buf + len, buf_len - len, "%30s %10d\n",
+			"Num Rx Timeout errors", pdev->rx_timeout_errs);
 	len += scnprintf(buf + len, buf_len - len, "%30s %10d\n",
 			"Num Rx Overflow errors", pdev->rx_ovfl_errs);
 
