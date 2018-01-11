@@ -74,6 +74,13 @@ static void ath10k_set_tx_rate_status(struct ath10k *ar,
 	rate->count = 1;
 	rate->idx = -1; /* Will set it properly below if rate-code is sane. */
 
+	/* NOTE:  We see reports of '24Mbps 40Mhz' tx rates often reported when we force
+	 * OFDM (24Mbps, etc) legacy tx rate when station is configured for (V)HT 40 on channel
+	 * 11.  One possibility is that the rate-flags are not reported correctly,
+	 * but also maybe it is a real issue on the air somehow?  Evidently, it is
+	 * possible to transmit an OFDM frame at 40Mhz when RTS/CTS is being used.
+	 */
+
 	switch ((tx_done->tx_rate_code >> 6) & 0x3) {
 	case WMI_RATE_PREAMBLE_CCK:
 		if (likely(hw_rate < cck_rateidx_size))

@@ -46,7 +46,8 @@
 #define WMI_READY_TIMEOUT (5 * HZ)
 #define ATH10K_FLUSH_TIMEOUT_HZ (5 * HZ)
 #define ATH10K_CONNECTION_LOSS_HZ (3 * HZ)
-#define ATH10K_NUM_CHANS 39
+#define ATH10K_NUM_CHANS 41
+#define ATH10K_MAX_5G_CHAN 173
 
 /* Antenna noise floor */
 #define ATH10K_DEFAULT_NOISE_FLOOR -95
@@ -1164,7 +1165,7 @@ struct ath10k {
 		bool rifs_enable_override;
 		bool txbf_cv_msg;
 		bool rx_all_mgt;
-		bool rc_txbf_probe;
+		u8 rc_txbf_probe;
 #define CT_DISABLE_20MHZ  0x1
 #define CT_DISABLE_40MHZ  0x2
 #define CT_DISABLE_80MHZ  0x4

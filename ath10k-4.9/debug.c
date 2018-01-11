@@ -3078,7 +3078,7 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		ar->eeprom_overrides.rc_txbf_probe = val;
 
 		ath10k_warn(ar, "Setting pdev rc-txbf-probe to 0x%x\n",
-			    val);
+			    ar->eeprom_overrides.rc_txbf_probe);
 
 		/* Search for WMI_FWTEST_CMDID in core.c */
 		ath10k_wmi_pdev_set_fwtest(ar, 20,
