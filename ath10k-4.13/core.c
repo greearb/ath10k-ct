@@ -1849,6 +1849,25 @@ static int ath10k_core_fetch_firmware_files(struct ath10k *ar)
 			goto success;
 	}
 
+	/* Check for CT firmware version 5 API. */
+	ar->fw_api = 5;
+	ath10k_dbg(ar, ATH10K_DBG_BOOT,
+		   "trying CT firmware version 5: ct-firmware-5.bin\n");
+	ret = ath10k_core_fetch_firmware_api_n(ar, "ct-firmware-5.bin",
+					       &ar->normal_mode_fw.fw_file);
+	if (ret == 0)
+		goto success;
+
+	/* Check for CT firmware version 2 API. */
+	ar->fw_api = 2;
+	ath10k_dbg(ar, ATH10K_DBG_BOOT,
+		   "trying CT firmware version 2: ct-firmware-2.bin\n");
+	ret = ath10k_core_fetch_firmware_api_n(ar, "ct-firmware-2.bin",
+					       &ar->normal_mode_fw.fw_file);
+	if (ret == 0)
+		goto success;
+
+
 	for (i = ATH10K_FW_API_MAX; i >= ATH10K_FW_API_MIN; i--) {
 		ar->fw_api = i;
 		ath10k_dbg(ar, ATH10K_DBG_BOOT, "trying fw api %d\n",
