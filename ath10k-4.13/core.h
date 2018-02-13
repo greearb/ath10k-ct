@@ -540,6 +540,7 @@ struct ath10k_fw_crash_data {
 struct ath10k_debug {
 	struct dentry *debugfs_phy;
 
+	struct ath10k_rx_reorder_stats rx_reorder_stats;
 	struct ath10k_fw_stats fw_stats;
 	struct completion fw_stats_complete;
 	bool fw_stats_done;
@@ -570,6 +571,10 @@ struct ath10k_debug {
 
 	/* These counters are kept in software. */
 	u64 rx_bytes; /* counter, total received bytes */
+	u32 rx_drop_unchain_oom; /* AMSDU Dropped due to un-chain OOM case */
+	u32 rx_drop_decap_non_raw_chained;
+	u32 rx_drop_no_freq;
+	u32 rx_drop_cac_running;
 
 	u32 tx_ok; /* counter, OK tx status count. */
 	u32 tx_noack; /* counter, no-ack tx status count. */
@@ -760,6 +765,9 @@ enum ath10k_fw_features {
 	 */
 	ATH10K_FW_FEATURE_HAS_TX_RC_CT = 45,
 
+	/* Do we support requesting custom stats */
+	ATH10K_FW_FEATURE_CUST_STATS_CT = 46,
+
 	/* keep last */
 	ATH10K_FW_FEATURE_COUNT,
 };
@@ -927,6 +935,7 @@ struct ath10k {
 
 	enum ath10k_hw_rev hw_rev;
 	u16 dev_id;
+	bool ok_tx_rate_status; /* Firmware is sending tx-rate status?  (CT only) */
 	bool fw_powerup_failed; /* If true, might take reboot to recover. */
 	u32 chip_id;
 	u32 target_version;
@@ -1190,6 +1199,8 @@ struct ath10k {
 	/* NAPI */
 	struct net_device napi_dev;
 	struct napi_struct napi;
+
+	struct work_struct stop_scan_work;
 
 	struct work_struct set_coverage_class_work;
 	/* protected by conf_mutex */

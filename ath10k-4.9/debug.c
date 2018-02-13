@@ -494,7 +494,45 @@ void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 
 	spin_lock_bh(&ar->data_lock);
 
+	/*ath10k_warn(ar, "fw-stats-process: stats-id: 0x%x(0x%x)\n", ev->stats_id, __le32_to_cpu(ev->stats_id));*/
 	/* CT Firmware only */
+	if (__le32_to_cpu(ev->stats_id) == WMI_REQUEST_STAT_CUSTOM) {
+		__le32* data;
+		u32 stats_len;
+		u32 *my_stats = NULL;
+		u32 my_len = 0;
+
+		if ((ar->running_fw->fw_file.wmi_op_version == ATH10K_FW_WMI_OP_VERSION_10_2) ||
+		    (ar->running_fw->fw_file.wmi_op_version == ATH10K_FW_WMI_OP_VERSION_10_4) ||
+		    (ar->running_fw->fw_file.wmi_op_version == ATH10K_FW_WMI_OP_VERSION_10_2_4)) {
+			const struct wmi_10_2_stats_event *ev2 = (void *)skb->data;
+			data = (__le32*)(ev2->data);
+			stats_len = (skb->len - sizeof(*ev2)) / 4;
+		} else {
+			/* Must be 10.1 */
+			data = (__le32*)(ev->data);
+			stats_len =  (skb->len - sizeof(*ev)) / 4;
+		}
+
+		if (ev->num_pdev_stats == WMI_STAT_CUSTOM_RX_REORDER_STATS) {
+			my_len = sizeof(ar->debug.rx_reorder_stats) / 4;
+			my_len = min(my_len, stats_len);
+			my_stats = (u32*)(&(ar->debug.rx_reorder_stats));
+		}
+
+		/* If we know about the stats, handle it here. */
+		if (my_stats) {
+			int i;
+			for (i = 0; i<my_len; i++) {
+				my_stats[i] = __le32_to_cpu(data[i]);
+			}
+		}
+		ar->debug.fw_stats_done = true;
+		complete(&ar->debug.fw_stats_complete);
+		/*ath10k_warn(ar, "Completed stat-custom, my_len: %u\n", my_len);*/
+		goto free;
+	}
+
 	if (__le32_to_cpu(ev->stats_id) == WMI_REQUEST_REGISTER_DUMP) {
 		struct ath10k_reg_dump* regdump;
 		struct ath10k_fw_stats* sptr = &ar->debug.fw_stats;
@@ -586,6 +624,7 @@ void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 				break;
 			}/* switch */
 		}
+		ar->debug.fw_stats_done = true;
 		complete(&ar->debug.fw_stats_complete);
 		goto free;
 	}
@@ -749,23 +788,29 @@ static int ath10k_fw_stats_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-int ath10k_refresh_peer_stats_t(struct ath10k *ar, u32 type)
+static int ath10k_refresh_peer_stats_t(struct ath10k *ar, u32 type, u32 specifier)
 {
 	int ret;
 	unsigned long time_left;
 
+	/*ath10k_warn(ar, "Requesting stats (type 0x%x specifier %d jiffies: %lu)\n",
+	  type, specifier, jiffies);*/
 	reinit_completion(&ar->debug.fw_stats_complete);
-	ret = ath10k_wmi_request_stats(ar, type);
+	ret = ath10k_wmi_request_stats(ar, type, specifier);
 
 	if (ret) {
-		ath10k_warn(ar, "could not request stats (type %d ret %d)\n",
-			    type, ret);
+		ath10k_warn(ar, "could not request stats (type %d ret %d specifier %d)\n",
+			    type, ret, specifier);
 		return ret;
 	}
 
 	/* ret means 'time-left' here */
 	time_left =
 		wait_for_completion_timeout(&ar->debug.fw_stats_complete, 1*HZ);
+
+	/* ath10k_warn(ar, "Requested stats (type 0x%x ret %d specifier %d jiffies: %lu  time-left: %lu)\n",
+	   type, ret, specifier, jiffies, time_left);*/
+
 	if (time_left == 0)
 		return -ETIMEDOUT;
 
@@ -774,17 +819,112 @@ int ath10k_refresh_peer_stats_t(struct ath10k *ar, u32 type)
 
 int ath10k_refresh_peer_stats(struct ath10k *ar)
 {
-	return ath10k_refresh_peer_stats_t(ar, ar->fw_stats_req_mask);
+	return ath10k_refresh_peer_stats_t(ar, ar->fw_stats_req_mask, 0);
 }
 
 int ath10k_refresh_target_regs(struct ath10k *ar)
 {
 	if (test_bit(ATH10K_FW_FEATURE_REGDUMP_CT,
 		     ar->running_fw->fw_file.fw_features))
-		return ath10k_refresh_peer_stats_t(ar, WMI_REQUEST_REGISTER_DUMP);
+		return ath10k_refresh_peer_stats_t(ar, WMI_REQUEST_REGISTER_DUMP, 0);
 	return 0; /* fail silently if firmware does not support this option. */
 }
 
+int ath10k_refresh_target_rx_reorder_stats(struct ath10k *ar)
+{
+	if (test_bit(ATH10K_FW_FEATURE_CUST_STATS_CT,
+		     ar->running_fw->fw_file.fw_features))
+		return ath10k_refresh_peer_stats_t(ar, WMI_REQUEST_STAT_CUSTOM, WMI_STAT_CUSTOM_RX_REORDER_STATS);
+	return 0; /* fail silently if firmware does not support this option. */
+}
+
+
+static ssize_t ath10k_read_rx_reorder_stats(struct file *file, char __user *user_buf,
+					    size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	struct ath10k_rx_reorder_stats *rrs;
+	char *buf = NULL;
+	unsigned int len = 0, buf_len = 8000;
+	ssize_t ret_cnt = 0;
+	int ret;
+
+	mutex_lock(&ar->conf_mutex);
+
+	rrs = &ar->debug.rx_reorder_stats;
+
+	if (ar->state != ATH10K_STATE_ON)
+		goto exit;
+
+	buf = kzalloc(buf_len, GFP_KERNEL);
+	if (!buf)
+		goto exit;
+
+	ret = ath10k_refresh_target_rx_reorder_stats(ar);
+	if (ret)
+		goto exit;
+
+	len += scnprintf(buf + len, buf_len - len, "\n");
+	len += scnprintf(buf + len, buf_len - len, "%30s\n",
+			 "ath10k RX Reorder Stats");
+	len += scnprintf(buf + len, buf_len - len, "%30s\n\n",
+				 "=================");
+
+#define PRINT_MY_STATS(a) len += scnprintf(buf + len, buf_len - len, "%30s %10d\n", #a, rrs->a)
+	/* Non QoS MPDUs received */
+	PRINT_MY_STATS(deliver_non_qos);
+	/* MPDUs received in-order */
+	PRINT_MY_STATS(deliver_in_order);
+	/* Flush due to reorder timer expired */
+	PRINT_MY_STATS(deliver_flush_timeout);
+	/* Flush due to move out of window */
+	PRINT_MY_STATS(deliver_flush_oow);
+	/* Flush due to DELBA */
+	PRINT_MY_STATS(deliver_flush_delba);
+	/* MPDUs dropped due to FCS error */
+	PRINT_MY_STATS(fcs_error);
+	/* MPDUs dropped due to monitor mode non-data packet */
+	PRINT_MY_STATS(mgmt_ctrl);
+	/* MPDUs dropped due to invalid peer */
+	PRINT_MY_STATS(invalid_peer);
+	/* MPDUs dropped due to duplication (non aggregation) */
+	PRINT_MY_STATS(dup_non_aggr);
+	/* MPDUs dropped due to processed before */
+	PRINT_MY_STATS(dup_past);
+	/* MPDUs dropped due to duplicate in reorder queue */
+	PRINT_MY_STATS(dup_in_reorder);
+	/* Reorder timeout happened */
+	PRINT_MY_STATS(reorder_timeout);
+	/* invalid bar ssn */
+	PRINT_MY_STATS(invalid_bar_ssn);
+	/* reorder reset due to bar ssn */
+	PRINT_MY_STATS(ssn_reset);
+
+	/* Added by Ben */
+	PRINT_MY_STATS(frag_invalid_peer);
+	PRINT_MY_STATS(frag_fcs_error);
+	PRINT_MY_STATS(frag_ok);
+	PRINT_MY_STATS(frag_discards);
+
+	PRINT_MY_STATS(rx_chatter);
+	PRINT_MY_STATS(tkip_mic_error);
+	PRINT_MY_STATS(tkip_decrypt_error);
+	PRINT_MY_STATS(mpdu_length_error);
+	PRINT_MY_STATS(non_frag_unicast_ok);
+
+	PRINT_MY_STATS(rx_flush_ind); // Flushed these due to timeout, etc.
+	PRINT_MY_STATS(rx_flush_ie_add); // Flushed these due to timeout, etc
+
+	if (len > buf_len)
+		len = buf_len;
+
+	ret_cnt = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+
+exit:
+	mutex_unlock(&ar->conf_mutex);
+	kfree(buf);
+	return ret_cnt;
+}
 
 static ssize_t ath10k_read_fw_regs(struct file *file, char __user *user_buf,
 				   size_t count, loff_t *ppos)
@@ -959,6 +1099,13 @@ static int ath10k_debug_fw_assert(struct ath10k *ar)
 
 static const struct file_operations fops_fw_regs = {
 	.read = ath10k_read_fw_regs,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static const struct file_operations fops_rx_reorder_stats = {
+	.read = ath10k_read_rx_reorder_stats,
 	.open = simple_open,
 	.owner = THIS_MODULE,
 	.llseek = default_llseek,
@@ -3466,6 +3613,9 @@ int ath10k_debug_register(struct ath10k *ar)
 
 	debugfs_create_file("wmi_services", S_IRUSR, ar->debug.debugfs_phy, ar,
 			    &fops_wmi_services);
+
+	debugfs_create_file("rx_reorder_stats", 0400, ar->debug.debugfs_phy, ar,
+			    &fops_rx_reorder_stats);
 
 	debugfs_create_file("set_rates", S_IRUSR | S_IWUSR, ar->debug.debugfs_phy,
 			    ar, &fops_set_rates);

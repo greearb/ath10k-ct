@@ -193,7 +193,12 @@ int ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 	    (info->flags & IEEE80211_TX_CTL_NO_ACK))
 		info->flags |= IEEE80211_TX_STAT_NOACK_TRANSMITTED;
 
-	if (tx_done->tx_rate_code || tx_done->tx_rate_flags) {
+	if (tx_done->tx_rate_code || tx_done->tx_rate_flags || ar->ok_tx_rate_status) {
+		/* rate-code for 48Mbps is 0, with no flags, so we need to remember
+		 * any other valid rates we might have seen and use that to know if
+		 * firmware is sending tx rates.
+		 */
+		ar->ok_tx_rate_status = true;
 		ath10k_set_tx_rate_status(ar, &info->status.rates[0], tx_done);
 
 		/* Only in version 14 and higher of CT firmware */

@@ -1971,6 +1971,27 @@ static void ath10k_wmi_event_scan_started(struct ath10k *ar)
 	}
 }
 
+void ath10k_wmi_stop_scan_work(struct work_struct *work)
+{
+	struct ath10k *ar = container_of(work, struct ath10k,
+					 stop_scan_work);
+	/* Kick firmware to get us back in sync */
+	struct wmi_stop_scan_arg arg = {
+		.req_id = 1, /* FIXME */
+		.req_type = WMI_SCAN_STOP_ONE,
+		.u.scan_id = ATH10K_SCAN_ID,
+	};
+	int ret;
+
+	ath10k_warn(ar, "calling wmi-stop-scan from wmi-stop-scan-work\n");
+
+	mutex_lock(&ar->conf_mutex);
+	ret = ath10k_wmi_stop_scan(ar, &arg);
+	if (ret)
+		ath10k_warn(ar, "stop-scan-work: failed to stop wmi scan: %d\n", ret);
+	mutex_unlock(&ar->conf_mutex);
+}
+
 static void ath10k_wmi_event_scan_start_failed(struct ath10k *ar,
 					       enum wmi_scan_completion_reason reason)
 {
@@ -1986,16 +2007,14 @@ static void ath10k_wmi_event_scan_start_failed(struct ath10k *ar,
 		break;
 	case ATH10K_SCAN_STARTING:
 		complete(&ar->scan.started);
-		if (reason == WMI_SCAN_REASON_BUSY) {
-			/* Kick firmware to get us back in sync */
-			struct wmi_stop_scan_arg arg = {
-				.req_id = 1, /* FIXME */
-				.req_type = WMI_SCAN_STOP_ONE,
-				.u.scan_id = ATH10K_SCAN_ID,
-			};
-			ath10k_wmi_stop_scan(ar, &arg);
-		}
 		__ath10k_scan_finish(ar);
+		if (reason == WMI_SCAN_REASON_BUSY) {
+			/* Cannot make WMI calls directly here, we are under data_lock and at
+			 * least sometimes in IRQ context.
+			 */
+			ath10k_warn(ar, "received scan start failed event in scan-starting state, will request stop-scan-work\n");
+			queue_work(ar->workqueue, &ar->stop_scan_work);
+		}
 		break;
 	}
 }
@@ -2236,6 +2255,8 @@ static int ath10k_wmi_op_pull_mgmt_rx_ev(struct ath10k *ar, struct sk_buff *skb,
 	size_t pull_len;
 	u32 msdu_len;
 	u32 len;
+	u32 snr;
+	u32 channel;
 
 	if (test_bit(ATH10K_FW_FEATURE_EXT_WMI_MGMT_RX,
 		     ar->running_fw->fw_file.fw_features)) {
@@ -2258,6 +2279,24 @@ static int ath10k_wmi_op_pull_mgmt_rx_ev(struct ath10k *ar, struct sk_buff *skb,
 	arg->snr = ev_hdr->snr;
 	arg->phy_mode = ev_hdr->phy_mode;
 	arg->rate = ev_hdr->rate;
+
+	snr = __le32_to_cpu(arg->snr);
+	channel = __le32_to_cpu(arg->channel);
+
+	/* Recent CT wave-1 firmware can report per-chain values if properly requested... */
+	if ((snr & 0xFFFFFF00) || (channel & 0xFF000000)) {
+		/* pri20_mhz signal */
+		arg->rssi_ctl[0] = snr >> 8;
+		arg->rssi_ctl[1] = snr >> 16;
+		arg->rssi_ctl[2] = snr >> 24;
+		snr = snr & 0xFF;
+
+		arg->rssi_ctl[3] = channel >> 24;
+		channel = channel & 0xFFFFFF;
+
+		arg->snr = __cpu_to_le32(snr);
+		arg->channel = __cpu_to_le32(channel);
+	}
 
 	msdu_len = __le32_to_cpu(arg->buf_len);
 	if (skb->len < msdu_len)
@@ -2287,6 +2326,7 @@ static int ath10k_wmi_10_4_op_pull_mgmt_rx_ev(struct ath10k *ar,
 	u32 msdu_len;
 	struct wmi_mgmt_rx_ext_info *ext_info;
 	u32 len;
+	int i;
 
 	ev = (struct wmi_10_4_mgmt_rx_event *)skb->data;
 	ev_hdr = &ev->hdr;
@@ -2302,6 +2342,8 @@ static int ath10k_wmi_10_4_op_pull_mgmt_rx_ev(struct ath10k *ar,
 	arg->snr = ev_hdr->snr;
 	arg->phy_mode = ev_hdr->phy_mode;
 	arg->rate = ev_hdr->rate;
+	for (i = 0; i<4; i++)
+		arg->rssi_ctl[i] = ev_hdr->rssi_ctl[i];
 
 	msdu_len = __le32_to_cpu(arg->buf_len);
 	if (skb->len < msdu_len)
@@ -2357,6 +2399,13 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 	u32 buf_len;
 	u16 fc;
 	int ret;
+	int i;
+
+	/* Initialize the rssi to 'ignore-me' value, stock wave-1
+	 * firmware doesn't support it.
+	 */
+	for (i = 0; i<4; i++)
+		arg.rssi_ctl[i] = 0x80;
 
 	ret = ath10k_wmi_pull_mgmt_rx(ar, skb, &arg);
 	if (ret) {
@@ -2416,6 +2465,12 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 
 	status->freq = ieee80211_channel_to_frequency(channel, status->band);
 	status->signal = snr + ATH10K_DEFAULT_NOISE_FLOOR;
+	for (i = 0; i<4; i++) {
+		if (arg.rssi_ctl[i] != 0x80) {
+			status->chains |= BIT(i);
+			status->chain_signal[i] = ATH10K_DEFAULT_NOISE_FLOOR + arg.rssi_ctl[i];
+		}
+	}
 	status->rate_idx = ath10k_mac_bitrate_to_idx(sband, rate / 100);
 
 	hdr = (struct ieee80211_hdr *)skb->data;
@@ -2451,8 +2506,11 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 		   fc & IEEE80211_FCTL_FTYPE, fc & IEEE80211_FCTL_STYPE);
 
 	ath10k_dbg(ar, ATH10K_DBG_MGMT,
-		   "event mgmt rx freq %d band %d snr %d, rate_idx %d\n",
+		   "event mgmt rx freq %d band %d snr %d chains: 0x%x(%d %d %d %d), rate_idx %d\n",
 		   status->freq, status->band, status->signal,
+		   status->chains,
+		   status->chain_signal[0], status->chain_signal[1],
+		   status->chain_signal[2], status->chain_signal[3],
 		   status->rate_idx);
 
 	ieee80211_rx(ar->hw, skb);
@@ -6047,7 +6105,7 @@ static struct sk_buff *ath10k_wmi_10_1_op_gen_init(struct ath10k *ar)
 		else if (ar->request_nohwcrypt) {
 			ath10k_err(ar, "nohwcrypt requested, but firmware does not support this feature.  Disabling swcrypt.\n");
 		}
-		config.rx_decap_mode |= __cpu_to_le32(ATH10k_USE_TXCOMPL_TXRATE);
+		config.rx_decap_mode |= __cpu_to_le32(ATH10k_USE_TXCOMPL_TXRATE | ATH10k_MGT_CHAIN_RSSI_OK);
 		/* Disable WoW in firmware, could make this module option perhaps? */
 		config.rx_decap_mode |= __cpu_to_le32(ATH10k_DISABLE_WOW);
 		config.roam_offload_max_vdev = 0; /* disable roaming */
@@ -6161,7 +6219,7 @@ static struct sk_buff *ath10k_wmi_10_2_op_gen_init(struct ath10k *ar)
 
 		if (test_bit(ATH10K_FW_FEATURE_TXRATE_CT,
 			     ar->running_fw->fw_file.fw_features))
-			config.rx_decap_mode |= __cpu_to_le32(ATH10k_USE_TXCOMPL_TXRATE);
+			config.rx_decap_mode |= __cpu_to_le32(ATH10k_USE_TXCOMPL_TXRATE | ATH10k_MGT_CHAIN_RSSI_OK);
 
 		/* Disable WoW in firmware, could make this module option perhaps? */
 		config.rx_decap_mode |= __cpu_to_le32(ATH10k_DISABLE_WOW);
@@ -6290,7 +6348,7 @@ static struct sk_buff *ath10k_wmi_10_4_op_gen_init(struct ath10k *ar)
 
 		if (test_bit(ATH10K_FW_FEATURE_TXRATE_CT,
 			     ar->running_fw->fw_file.fw_features)) {
-			config.rx_decap_mode |= __cpu_to_le32(ATH10k_USE_TXCOMPL_TXRATE);
+			config.rx_decap_mode |= __cpu_to_le32(ATH10k_USE_TXCOMPL_TXRATE | ATH10k_MGT_CHAIN_RSSI_OK);
 			/* Must enable alloc_frag_desc_for_data_pkt for txrate support.  This eats up
 			 * 4 extra bytes per msdu descriptor.
 			 */
@@ -7507,7 +7565,7 @@ ath10k_wmi_op_gen_pdev_set_wmm(struct ath10k *ar,
 }
 
 static struct sk_buff *
-ath10k_wmi_op_gen_request_stats(struct ath10k *ar, u32 stats_mask)
+ath10k_wmi_op_gen_request_stats(struct ath10k *ar, u32 stats_mask, u32 specifier)
 {
 	struct wmi_request_stats_cmd *cmd;
 	struct sk_buff *skb;
@@ -7518,6 +7576,7 @@ ath10k_wmi_op_gen_request_stats(struct ath10k *ar, u32 stats_mask)
 
 	cmd = (struct wmi_request_stats_cmd *)skb->data;
 	cmd->stats_id = __cpu_to_le32(stats_mask);
+	cmd->vdev_id = __cpu_to_le32(specifier);
 
 	ath10k_dbg(ar, ATH10K_DBG_WMI, "wmi request stats 0x%08x\n",
 		   stats_mask);

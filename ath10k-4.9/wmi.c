@@ -1973,6 +1973,27 @@ static void ath10k_wmi_event_scan_started(struct ath10k *ar)
 	}
 }
 
+void ath10k_wmi_stop_scan_work(struct work_struct *work)
+{
+	struct ath10k *ar = container_of(work, struct ath10k,
+					 stop_scan_work);
+	/* Kick firmware to get us back in sync */
+	struct wmi_stop_scan_arg arg = {
+		.req_id = 1, /* FIXME */
+		.req_type = WMI_SCAN_STOP_ONE,
+		.u.scan_id = ATH10K_SCAN_ID,
+	};
+	int ret;
+
+	ath10k_warn(ar, "calling wmi-stop-scan from wmi-stop-scan-work\n");
+
+	mutex_lock(&ar->conf_mutex);
+	ret = ath10k_wmi_stop_scan(ar, &arg);
+	if (ret)
+		ath10k_warn(ar, "stop-scan-work: failed to stop wmi scan: %d\n", ret);
+	mutex_unlock(&ar->conf_mutex);
+}
+
 static void ath10k_wmi_event_scan_start_failed(struct ath10k *ar,
 					       enum wmi_scan_completion_reason reason)
 {
@@ -1988,16 +2009,14 @@ static void ath10k_wmi_event_scan_start_failed(struct ath10k *ar,
 		break;
 	case ATH10K_SCAN_STARTING:
 		complete(&ar->scan.started);
-		if (reason == WMI_SCAN_REASON_BUSY) {
-			/* Kick firmware to get us back in sync */
-			struct wmi_stop_scan_arg arg = {
-				.req_id = 1, /* FIXME */
-				.req_type = WMI_SCAN_STOP_ONE,
-				.u.scan_id = ATH10K_SCAN_ID,
-			};
-			ath10k_wmi_stop_scan(ar, &arg);
-		}
 		__ath10k_scan_finish(ar);
+		if (reason == WMI_SCAN_REASON_BUSY) {
+			/* Cannot make WMI calls directly here, we are under data_lock and at
+			 * least sometimes in IRQ context.
+			 */
+			ath10k_warn(ar, "received scan start failed event in scan-starting state, will request stop-scan-work\n");
+			queue_work(ar->workqueue, &ar->stop_scan_work);
+		}
 		break;
 	}
 }
@@ -7427,7 +7446,7 @@ ath10k_wmi_op_gen_pdev_set_wmm(struct ath10k *ar,
 }
 
 static struct sk_buff *
-ath10k_wmi_op_gen_request_stats(struct ath10k *ar, u32 stats_mask)
+ath10k_wmi_op_gen_request_stats(struct ath10k *ar, u32 stats_mask, u32 specifier)
 {
 	struct wmi_request_stats_cmd *cmd;
 	struct sk_buff *skb;
@@ -7438,6 +7457,7 @@ ath10k_wmi_op_gen_request_stats(struct ath10k *ar, u32 stats_mask)
 
 	cmd = (struct wmi_request_stats_cmd *)skb->data;
 	cmd->stats_id = __cpu_to_le32(stats_mask);
+	cmd->vdev_id = __cpu_to_le32(specifier);
 
 	ath10k_dbg(ar, ATH10K_DBG_WMI, "wmi request stats 0x%08x\n",
 		   stats_mask);

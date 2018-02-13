@@ -6185,6 +6185,9 @@ static int ath10k_hw_scan(struct ieee80211_hw *hw,
 	mutex_lock(&ar->conf_mutex);
 
 	spin_lock_bh(&ar->data_lock);
+
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac hw-scan called, scan.state: %d\n", ar->scan.state);
+
 	switch (ar->scan.state) {
 	case ATH10K_SCAN_IDLE:
 		reinit_completion(&ar->scan.started);
@@ -6198,6 +6201,7 @@ static int ath10k_hw_scan(struct ieee80211_hw *hw,
 	case ATH10K_SCAN_RUNNING:
 	case ATH10K_SCAN_ABORTING:
 		ret = -EBUSY;
+		ath10k_warn(ar, "failed to start hw scan (busy): scan-state: %d\n", ar->scan.state);
 		break;
 	}
 	spin_unlock_bh(&ar->data_lock);
@@ -6271,6 +6275,8 @@ static void ath10k_cancel_hw_scan(struct ieee80211_hw *hw,
 				  struct ieee80211_vif *vif)
 {
 	struct ath10k *ar = hw->priv;
+
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac cancel-hw-scan called\n");
 
 	mutex_lock(&ar->conf_mutex);
 	ath10k_scan_abort(ar);

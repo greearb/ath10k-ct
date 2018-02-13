@@ -2263,6 +2263,8 @@ struct wmi_resource_config {
 	 * that do not need WoW.
 	 */
 	#define ATH10k_DISABLE_WOW        0x40000
+	/* Ask CT firmware to send back per-chain management frame RSSI info */
+	#define ATH10k_MGT_CHAIN_RSSI_OK  0x80000
 	__le32 rx_decap_mode;
 
 	/* what is the maximum number of scan requests that can be queued */
@@ -4296,13 +4298,67 @@ enum wmi_stats_id {
 	WMI_STAT_BCNFLT = BIT(4),
 	WMI_STAT_VDEV_RATE = BIT(5),
 	WMI_REQUEST_REGISTER_DUMP = BIT(7), /* 0x80, CT Firmware only, request register dump. */
+	WMI_REQUEST_STAT_CUSTOM = 0xF0000000, /* CT Firmware stats hack, in this case,
+					       * vdev-id is 'stats-id' for requests */
 };
+
+#define WMI_STAT_CUSTOM_RX_REORDER_STATS 0
 
 enum wmi_10_4_stats_id {
 	WMI_10_4_STAT_PEER		= BIT(0),
 	WMI_10_4_STAT_AP		= BIT(1),
 	WMI_10_4_STAT_INST		= BIT(2),
 	WMI_10_4_STAT_PEER_EXTD		= BIT(3),
+};
+
+/*
+ * Rx reorder statistics
+ * NB: all the fields must be defined in 4 octets size.
+ */
+struct ath10k_rx_reorder_stats {
+    /* Non QoS MPDUs received */
+    u32 deliver_non_qos;
+    /* MPDUs received in-order */
+    u32 deliver_in_order;
+    /* Flush due to reorder timer expired */
+    u32 deliver_flush_timeout;
+    /* Flush due to move out of window */
+    u32 deliver_flush_oow;
+    /* Flush due to DELBA */
+    u32 deliver_flush_delba;
+    /* MPDUs dropped due to FCS error */
+    u32 fcs_error;
+    /* MPDUs dropped due to monitor mode non-data packet */
+    u32 mgmt_ctrl;
+    /* MPDUs dropped due to invalid peer */
+    u32 invalid_peer;
+    /* MPDUs dropped due to duplication (non aggregation) */
+    u32 dup_non_aggr;
+    /* MPDUs dropped due to processed before */
+    u32 dup_past;
+    /* MPDUs dropped due to duplicate in reorder queue */
+    u32 dup_in_reorder;
+    /* Reorder timeout happened */
+    u32 reorder_timeout;
+    /* invalid bar ssn */
+    u32 invalid_bar_ssn;
+    /* reorder reset due to bar ssn */
+    u32 ssn_reset;
+
+    /* Added by Ben */
+    u32 frag_invalid_peer;
+    u32 frag_fcs_error;
+    u32 frag_ok;
+    u32 frag_discards;
+
+    u32 rx_chatter;
+    u32 tkip_mic_error;
+    u32 tkip_decrypt_error;
+    u32 mpdu_length_error;
+    u32 non_frag_unicast_ok;
+
+    u32 rx_flush_ind; // Flushed these due to timeout, etc.
+    u32 rx_flush_ie_add; // Flushed these due to timeout, etc
 };
 
 struct wlan_inst_rssi_args {
@@ -4313,7 +4369,7 @@ struct wlan_inst_rssi_args {
 struct wmi_request_stats_cmd {
 	__le32 stats_id;
 
-	__le32 vdev_id;
+	__le32 vdev_id; /* Or custom-stat identifier if stats_id == WMI_REQUEST_STAT_CUSTOM, CT FW only */
 
 	/* peer MAC address */
 	struct wmi_mac_addr peer_macaddr;
@@ -4342,7 +4398,7 @@ struct wmi_stats_event {
 	 * number of pdev stats event structures
 	 * (wmi_pdev_stats) 0 or 1
 	 */
-	__le32 num_pdev_stats;
+	__le32 num_pdev_stats; /* Or custom-stats-type of stats_id == WMI_REQUEST_STAT_CUSTOM */
 	/*
 	 * number of vdev stats event structures
 	 * (wmi_vdev_stats) 0 or max vdevs
@@ -6490,6 +6546,7 @@ struct wmi_scan_ev_arg {
 struct wmi_mgmt_rx_ev_arg {
 	__le32 channel;
 	__le32 snr;
+	u8 rssi_ctl[4];
 	__le32 rate;
 	__le32 phy_mode;
 	__le32 buf_len;
@@ -6995,6 +7052,7 @@ void ath10k_wmi_10_4_op_fw_stats_fill(struct ath10k *ar,
 int ath10k_wmi_op_get_vdev_subtype(struct ath10k *ar,
 				   enum wmi_vdev_subtype subtype);
 int ath10k_wmi_barrier(struct ath10k *ar);
+void ath10k_wmi_stop_scan_work(struct work_struct *work);
 
 #ifdef CONFIG_ATH10K_DEBUGFS
 /* TODO:  Should really enable this all the time, not just when DEBUGFS is enabled. --Ben */

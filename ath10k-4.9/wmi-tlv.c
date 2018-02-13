@@ -2423,7 +2423,7 @@ ath10k_wmi_tlv_op_gen_pdev_set_wmm(struct ath10k *ar,
 }
 
 static struct sk_buff *
-ath10k_wmi_tlv_op_gen_request_stats(struct ath10k *ar, u32 stats_mask)
+ath10k_wmi_tlv_op_gen_request_stats(struct ath10k *ar, u32 stats_mask, u32 specifier)
 {
 	struct wmi_request_stats_cmd *cmd;
 	struct wmi_tlv *tlv;

@@ -400,6 +400,7 @@ static const char *const ath10k_core_fw_feature_str[] = {
 	[ATH10K_FW_FEATURE_NO_BMISS_CT] = "no-bmiss-CT",
 	[ATH10K_FW_FEATURE_HAS_GET_TEMP_CT] = "get-temp-CT",
 	[ATH10K_FW_FEATURE_HAS_TX_RC_CT] = "tx-rc-CT",
+	[ATH10K_FW_FEATURE_CUST_STATS_CT] = "cust-stats-CT",
 };
 
 static unsigned int ath10k_core_get_fw_feature_str(char *buf,
@@ -2110,6 +2111,7 @@ static void ath10k_core_restart(struct work_struct *work)
 	 * with conf_mutex it will deadlock.
 	 */
 	cancel_work_sync(&ar->set_coverage_class_work);
+	cancel_work_sync(&ar->stop_scan_work);
 
 	mutex_lock(&ar->conf_mutex);
 
@@ -2488,6 +2490,7 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 
 	clear_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags);
 
+	ar->ok_tx_rate_status = false;
 	ar->running_fw = fw;
 
 	ath10k_bmi_start(ar);
@@ -3206,6 +3209,7 @@ struct ath10k *ath10k_core_create(size_t priv_size, struct device *dev,
 	INIT_WORK(&ar->restart_work, ath10k_core_restart);
 	INIT_WORK(&ar->set_coverage_class_work,
 		  ath10k_core_set_coverage_class_work);
+	INIT_WORK(&ar->stop_scan_work, ath10k_wmi_stop_scan_work);
 
 	init_dummy_netdev(&ar->napi_dev);
 
