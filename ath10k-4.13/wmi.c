@@ -4981,6 +4981,9 @@ static void ath10k_wmi_event_service_ready_work(struct work_struct *work)
 	    ar->request_nohwcrypt)
 		ar->vht_cap_info &= ~IEEE80211_VHT_CAP_MU_BEAMFORMEE_CAPABLE;
 
+	if (ar->request_nobeamform_mu)
+		ar->vht_cap_info &= ~(IEEE80211_VHT_CAP_MU_BEAMFORMEE_CAPABLE | IEEE80211_VHT_CAP_MU_BEAMFORMER_CAPABLE);
+
 	if (ar->num_rf_chains > ar->max_spatial_stream) {
 		ath10k_warn(ar, "hardware advertises support for more spatial streams than it should (%d > %d)\n",
 			    ar->num_rf_chains, ar->max_spatial_stream);
