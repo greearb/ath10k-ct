@@ -918,6 +918,18 @@ static ssize_t ath10k_read_rx_reorder_stats(struct file *file, char __user *user
 	PRINT_MY_STATS(rx_flush_ind); // Flushed these due to timeout, etc.
 	PRINT_MY_STATS(rx_flush_ie_add); // Flushed these due to timeout, etc
 
+	/* Wave-2 specific */
+	PRINT_MY_STATS(rx_mesh_wrong_dest);
+	PRINT_MY_STATS(rx_mesh_filter_ra);
+	PRINT_MY_STATS(rx_mesh_filter_fromds);
+	PRINT_MY_STATS(rx_mesh_filter_tods);
+	PRINT_MY_STATS(rx_mesh_filter_nods);
+	PRINT_MY_STATS(rx_radar_fft_war);
+	PRINT_MY_STATS(rx_drop_encrypt_required);
+	PRINT_MY_STATS(rx_mpdu_tid_err);
+	PRINT_MY_STATS(rx_ba_statemachine_err);
+	PRINT_MY_STATS(rx_drop_replay);
+
 	if (len > buf_len)
 		len = buf_len;
 
