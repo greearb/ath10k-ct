@@ -1497,7 +1497,7 @@ static void ath10k_dbg_drop_dbg_buffer(struct ath10k *ar)
 {
 	/* Find next message boundary */
 	u32 lg_hdr;
-	int acnt;
+	unsigned int acnt;
 	int tail_idx = ar->debug.dbglog_entry_data.tail_idx;
 	int h_idx = (tail_idx + 1) % ATH10K_DBGLOG_DATA_LEN;
 
@@ -1527,8 +1527,32 @@ void ath10k_dbg_save_fw_dbg_buffer(struct ath10k *ar, __le32 *buffer, int len)
 {
 	int i;
 	int z;
+	u32 lg_hdr = 0;
+	unsigned int acnt = 0;
 
 	lockdep_assert_held(&ar->data_lock);
+
+	/* Make sure input is sane */
+	i = 0;
+	while (i < len) {
+		lg_hdr = le32_to_cpu(buffer[i + 1]);
+		acnt = (lg_hdr & DBGLOG_NUM_ARGS_MASK) >> DBGLOG_NUM_ARGS_OFFSET;
+
+		if (acnt > DBGLOG_NUM_ARGS_MAX) {
+		bad:
+			ath10k_err(ar, "Invalid fw-dbg-buffer, hdr-at[%i], len: %d arg-len: %d  hdr: 0x%x\n",
+				   i + 1, len, acnt, lg_hdr);
+			for (i = 0; i<len; i++) {
+				ath10k_err(ar, "buffer[%i] 0x%x\n", i, le32_to_cpu(buffer[i]));
+			}
+			return;
+		}
+		i += 2 + acnt;
+	}
+
+	/* Some trailing garbage? */
+	if (i != len)
+		goto bad;
 
 	z = ar->debug.dbglog_entry_data.head_idx;
 
