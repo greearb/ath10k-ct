@@ -915,6 +915,18 @@ static ssize_t ath10k_read_rx_reorder_stats(struct file *file, char __user *user
 	PRINT_MY_STATS(rx_flush_ind); // Flushed these due to timeout, etc.
 	PRINT_MY_STATS(rx_flush_ie_add); // Flushed these due to timeout, etc
 
+	/* Wave-2 specific */
+	PRINT_MY_STATS(rx_mesh_wrong_dest);
+	PRINT_MY_STATS(rx_mesh_filter_ra);
+	PRINT_MY_STATS(rx_mesh_filter_fromds);
+	PRINT_MY_STATS(rx_mesh_filter_tods);
+	PRINT_MY_STATS(rx_mesh_filter_nods);
+	PRINT_MY_STATS(rx_radar_fft_war);
+	PRINT_MY_STATS(rx_drop_encrypt_required);
+	PRINT_MY_STATS(rx_mpdu_tid_err);
+	PRINT_MY_STATS(rx_ba_statemachine_err);
+	PRINT_MY_STATS(rx_drop_replay);
+
 	if (len > buf_len)
 		len = buf_len;
 
@@ -1479,7 +1491,7 @@ static void ath10k_dbg_drop_dbg_buffer(struct ath10k *ar)
 {
 	/* Find next message boundary */
 	u32 lg_hdr;
-	int acnt;
+	unsigned int acnt;
 	int tail_idx = ar->debug.dbglog_entry_data.tail_idx;
 	int h_idx = (tail_idx + 1) % ATH10K_DBGLOG_DATA_LEN;
 
@@ -1509,8 +1521,32 @@ void ath10k_dbg_save_fw_dbg_buffer(struct ath10k *ar, __le32 *buffer, int len)
 {
 	int i;
 	int z;
+	u32 lg_hdr = 0;
+	unsigned int acnt = 0;
 
 	lockdep_assert_held(&ar->data_lock);
+
+	/* Make sure input is sane */
+	i = 0;
+	while (i < len) {
+		lg_hdr = le32_to_cpu(buffer[i + 1]);
+		acnt = (lg_hdr & DBGLOG_NUM_ARGS_MASK) >> DBGLOG_NUM_ARGS_OFFSET;
+
+		if (acnt > DBGLOG_NUM_ARGS_MAX) {
+		bad:
+			ath10k_err(ar, "Invalid fw-dbg-buffer, hdr-at[%i], len: %d arg-len: %d  hdr: 0x%x\n",
+				   i + 1, len, acnt, lg_hdr);
+			for (i = 0; i<len; i++) {
+				ath10k_err(ar, "buffer[%i] 0x%x\n", i, le32_to_cpu(buffer[i]));
+			}
+			return;
+		}
+		i += 2 + acnt;
+	}
+
+	/* Some trailing garbage? */
+	if (i != len)
+		goto bad;
 
 	z = ar->debug.dbglog_entry_data.head_idx;
 
@@ -2211,6 +2247,10 @@ static const char ath10k_gstrings_stats[][ETH_GSTRING_LEN] = {
 	"tx_bytes_to_fw", /* sent to firmware, counts all failures */
 	"rx_pkts_nic", /* From firmware...maybe should be from driver for symmetry? */
 	"rx_bytes_nic", /* from driver, firmware does not keep this stat. */
+	"rx_drop_unchain_oom", /* Dropped due to OOM pressure in unchain_msdu path */
+	"rx_drop_decap_non_raw_chained",
+	"rx_drop_no_freq",
+	"rx_drop_cac_running",
 	"d_noise_floor",
 	"d_cycle_count", /* this is duty cycle counter, basically channel-time. 88MHz clock */
 	"d_tx_cycle_count", /* tx cycle count */
@@ -2329,6 +2369,10 @@ void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
 	data[i++] = ar->debug.tx_bytes;
 	data[i++] = pdev_stats->htt_mpdus;
 	data[i++] = ar->debug.rx_bytes;
+	data[i++] = ar->debug.rx_drop_unchain_oom;
+	data[i++] = ar->debug.rx_drop_decap_non_raw_chained;
+	data[i++] = ar->debug.rx_drop_no_freq;
+	data[i++] = ar->debug.rx_drop_cac_running;
 	data[i++] = pdev_stats->ch_noise_floor;
 	data[i++] = pdev_stats->cycle_count;
 	data[i++] = pdev_stats->tx_frame_count;

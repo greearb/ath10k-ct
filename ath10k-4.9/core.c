@@ -1117,6 +1117,18 @@ start_again:
 				ar->fwcfg.flags |= ATH10K_FWCFG_NOHWCRYPT;
 			}
 		}
+		else if (strcasecmp(filename, "nobeamform_mu") == 0) {
+			if (kstrtol(val, 0, &t) == 0) {
+				ar->fwcfg.nobeamform_mu = t;
+				ar->fwcfg.flags |= ATH10K_FWCFG_NOBEAMFORM_MU;
+			}
+		}
+		else if (strcasecmp(filename, "nobeamform_su") == 0) {
+			if (kstrtol(val, 0, &t) == 0) {
+				ar->fwcfg.nobeamform_su = t;
+				ar->fwcfg.flags |= ATH10K_FWCFG_NOBEAMFORM_SU;
+			}
+		}
 		else if (strcasecmp(filename, "rate_ctrl_objs") == 0) {
 			if (kstrtol(val, 0, &t) == 0) {
 				ar->fwcfg.rate_ctrl_objs = t;
@@ -2237,6 +2249,8 @@ static int ath10k_core_init_firmware_features(struct ath10k *ar)
 	}
 
 	ar->request_nohwcrypt = ath10k_modparam_nohwcrypt;
+	ar->request_nobeamform_mu = ath10k_modparam_nobeamform_mu;
+	ar->request_nobeamform_su = ath10k_modparam_nobeamform_su;
 	ar->num_ratectrl_objs = ath10k_modparam_target_num_rate_ctrl_objs_ct;
 	ar->eeprom_regdom = _modparam_override_eeprom_regdomain;
 
@@ -2249,6 +2263,10 @@ static int ath10k_core_init_firmware_features(struct ath10k *ar)
 		ar->max_num_stations = ar->fwcfg.stations;
 	if (ar->fwcfg.flags & ATH10K_FWCFG_NOHWCRYPT)
 		ar->request_nohwcrypt = ar->fwcfg.nohwcrypt;
+	if (ar->fwcfg.flags & ATH10K_FWCFG_NOBEAMFORM_MU)
+		ar->request_nobeamform_mu = ar->fwcfg.nobeamform_mu;
+	if (ar->fwcfg.flags & ATH10K_FWCFG_NOBEAMFORM_SU)
+		ar->request_nobeamform_su = ar->fwcfg.nobeamform_su;
 	if (ar->fwcfg.flags & ATH10K_FWCFG_RATE_CTRL_OBJS)
 		ar->num_ratectrl_objs = ar->fwcfg.rate_ctrl_objs;
 	if (ar->fwcfg.flags & ATH10K_FWCFG_TX_DESC)

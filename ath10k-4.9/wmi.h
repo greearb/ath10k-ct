@@ -4311,49 +4311,61 @@ enum wmi_10_4_stats_id {
  * NB: all the fields must be defined in 4 octets size.
  */
 struct ath10k_rx_reorder_stats {
-    /* Non QoS MPDUs received */
-    u32 deliver_non_qos;
-    /* MPDUs received in-order */
-    u32 deliver_in_order;
-    /* Flush due to reorder timer expired */
-    u32 deliver_flush_timeout;
-    /* Flush due to move out of window */
-    u32 deliver_flush_oow;
-    /* Flush due to DELBA */
-    u32 deliver_flush_delba;
-    /* MPDUs dropped due to FCS error */
-    u32 fcs_error;
-    /* MPDUs dropped due to monitor mode non-data packet */
-    u32 mgmt_ctrl;
-    /* MPDUs dropped due to invalid peer */
-    u32 invalid_peer;
-    /* MPDUs dropped due to duplication (non aggregation) */
-    u32 dup_non_aggr;
-    /* MPDUs dropped due to processed before */
-    u32 dup_past;
-    /* MPDUs dropped due to duplicate in reorder queue */
-    u32 dup_in_reorder;
-    /* Reorder timeout happened */
-    u32 reorder_timeout;
-    /* invalid bar ssn */
-    u32 invalid_bar_ssn;
-    /* reorder reset due to bar ssn */
-    u32 ssn_reset;
+	/* Non QoS MPDUs received */
+	u32 deliver_non_qos; /* not set in wave-2 currently */
+	/* MPDUs received in-order */
+	u32 deliver_in_order;
+	/* Flush due to reorder timer expired */
+	u32 deliver_flush_timeout;
+	/* Flush due to move out of window */
+	u32 deliver_flush_oow;
+	/* Flush due to DELBA */
+	u32 deliver_flush_delba;
+	/* MPDUs dropped due to FCS error */
+	u32 fcs_error;
+	/* MPDUs dropped due to monitor mode non-data packet */
+	u32 mgmt_ctrl;
+	/* MPDUs dropped due to invalid peer */
+	u32 invalid_peer;
+	/* MPDUs dropped due to duplication (non aggregation) */
+	u32 dup_non_aggr;
+	/* MPDUs dropped due to processed before */
+	u32 dup_past;
+	/* MPDUs dropped due to duplicate in reorder queue */
+	u32 dup_in_reorder;
+	/* Reorder timeout happened */
+	u32 reorder_timeout;
+	/* invalid bar ssn */
+	u32 invalid_bar_ssn;
+	/* reorder reset due to bar ssn */
+	u32 ssn_reset;
 
-    /* Added by Ben */
-    u32 frag_invalid_peer;
-    u32 frag_fcs_error;
-    u32 frag_ok;
-    u32 frag_discards;
+	/* Added by Ben */
+	u32 frag_invalid_peer;
+	u32 frag_fcs_error;
+	u32 frag_ok;
+	u32 frag_discards;
 
-    u32 rx_chatter;
-    u32 tkip_mic_error;
-    u32 tkip_decrypt_error;
-    u32 mpdu_length_error;
-    u32 non_frag_unicast_ok;
+	u32 rx_chatter;
+	u32 tkip_mic_error;
+	u32 tkip_decrypt_error;
+	u32 mpdu_length_error;
+	u32 non_frag_unicast_ok;
 
-    u32 rx_flush_ind; // Flushed these due to timeout, etc.
-    u32 rx_flush_ie_add; // Flushed these due to timeout, etc
+	u32 rx_flush_ind; // Flushed these due to timeout, etc.
+	u32 rx_flush_ie_add; // Flushed these due to timeout, etc
+
+	/* Wave-2 specific */
+	u32 rx_mesh_wrong_dest;
+	u32 rx_mesh_filter_ra;
+	u32 rx_mesh_filter_fromds;
+	u32 rx_mesh_filter_tods;
+	u32 rx_mesh_filter_nods;
+	u32 rx_radar_fft_war;
+	u32 rx_drop_encrypt_required;
+	u32 rx_mpdu_tid_err;
+	u32 rx_ba_statemachine_err;
+	u32 rx_drop_replay;
 };
 
 struct wlan_inst_rssi_args {

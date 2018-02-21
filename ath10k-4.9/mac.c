@@ -213,6 +213,15 @@ int ath10k_mac_ext_resource_config(struct ath10k *ar, u32 val)
 int ath10k_modparam_nohwcrypt;
 module_param_named(nohwcrypt, ath10k_modparam_nohwcrypt, int, 0444);
 MODULE_PARM_DESC(nohwcrypt, "Disable hardware rx decrypt feature");
+
+int ath10k_modparam_nobeamform_mu;
+module_param_named(nobeamform_mu, ath10k_modparam_nobeamform_mu, int, 0444);
+MODULE_PARM_DESC(nobeamform_mu, "Disable TX/RX MU Beamforming capabilities");
+
+int ath10k_modparam_nobeamform_su;
+module_param_named(nobeamform_su, ath10k_modparam_nobeamform_su, int, 0444);
+MODULE_PARM_DESC(nobeamform_su, "Disable TX/RX SU Beamforming capabilities");
+
 int ath10k_modparam_target_num_vdevs_ct = DEF_TARGET_10X_NUM_VDEVS_CT;
 module_param_named(num_vdevs_ct, ath10k_modparam_target_num_vdevs_ct, int, 0444);
 MODULE_PARM_DESC(num_vdevs_ct, "Maximum vdevs to request from firmware");
