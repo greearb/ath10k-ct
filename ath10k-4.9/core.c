@@ -2625,6 +2625,11 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 						    ar->eeprom_overrides.allow_ibss_amsdu);
 		}
 
+		if (ar->eeprom_overrides.tx_hang_cold_reset_ok) {
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_TX_HANG_COLD_RESET,
+						    ar->eeprom_overrides.tx_hang_cold_reset_ok);
+		}
+
 		if (ar->eeprom_overrides.max_txpower != 0xFFFF)
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_MAX_TXPOWER,
 						    ar->eeprom_overrides.max_txpower);

@@ -926,6 +926,7 @@ static ssize_t ath10k_read_rx_reorder_stats(struct file *file, char __user *user
 	PRINT_MY_STATS(rx_mpdu_tid_err);
 	PRINT_MY_STATS(rx_ba_statemachine_err);
 	PRINT_MY_STATS(rx_drop_replay);
+	PRINT_MY_STATS(rx_non_data_drop_no_bufs);
 
 	if (len > buf_len)
 		len = buf_len;
@@ -3152,6 +3153,8 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 	}
 	else if (id == SET_SPECIAL_ID_IBSS_AMSDU_OK) {
 		ar->eeprom_overrides.allow_ibss_amsdu = !!val;
+		ath10k_warn(ar, "Setting ibss-amsdu-ok to %d\n",
+			    ar->eeprom_overrides.allow_ibss_amsdu);
 	}
 	else if (id == SET_SPECIAL_ID_MAX_TXPOWER) {
 		/* This can only be set once, and is designed to be
@@ -3172,6 +3175,8 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 	}
 	else if (id == SET_SPECIAL_ID_RC_MAX_PER_THR) {
 		ar->eeprom_overrides.rc_rate_max_per_thr = val;
+		ath10k_warn(ar, "Setting rc-max-per-threshold to %d\n",
+			    ar->eeprom_overrides.rc_rate_max_per_thr);
 	}
 	else if (id == SET_SPECIAL_ID_STA_TXBW_MASK) {
 		/* Specify Station tx bandwidth mask (20, 40, 80Mhz). */
@@ -3223,6 +3228,11 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 
 		ath10k_warn(ar, "Setting pdev rx-all-mgt to 0x%x.\n",
 			    val);
+	}
+	else if (id == SET_SPECIAL_ID_TX_HANG_COLD_RESET) {
+		ar->eeprom_overrides.tx_hang_cold_reset_ok = !!val;
+		ath10k_warn(ar, "Setting tx-hang-cold-reset-ok to %d\n",
+			    ar->eeprom_overrides.tx_hang_cold_reset_ok);
 	}
 	else if (id == SET_SPECIAL_ID_TX_DBG) {
 		/* Set TX debugging */
@@ -3327,6 +3337,9 @@ static ssize_t ath10k_read_ct_special(struct file *file,
 		"id: 0xD Enable CSI reporting for at least probe requests.\n"
 		"id: 0xE set rate-bandwidth-disable-mask: 20Mhz 0x1, 40Mhz 0x2, 80Mhz 0x4, 160Mhz 0x8.\n"
 		"    Takes effect next time rates are set.  Set to 0x0 for default rates.\n"
+		"id: 0xF Enable TXBF-CV-MSG.\n"
+		"id: 0x10 rx-all-mgt.\n"
+		"id: 0x11 allow tx-hang logic to try cold resets instead of just warm resets.\n"
 		"\nBelow here should work with most firmware, including non-CT firmware.\n"
 		"id: 0x1001 set sta-kickout threshold due to tx-failures (0 means disable.  Default is 20 * 16.)\n"
 		"id: 0x1002 set su-sounding-timer-ms (0 means use defaults next FW reload.  Default is 100, max is 500)\n"

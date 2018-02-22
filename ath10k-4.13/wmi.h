@@ -4371,6 +4371,10 @@ struct ath10k_rx_reorder_stats {
 	u32 rx_mpdu_tid_err;
 	u32 rx_ba_statemachine_err;
 	u32 rx_drop_replay;
+
+	u32 rx_non_data_drop_no_bufs; /* We had no htt buffer space to send non-data
+				       * packet descriptors, so frames were dropped.  Stock
+				       * FW just asserts in this case, btw. */
 };
 
 struct wlan_inst_rssi_args {
@@ -6720,6 +6724,7 @@ struct wmi_pdev_set_special_cmd {
 #define SET_SPECIAL_ID_RX_ALL_MGT     0x10 /* Pass all possible mgt frames up to the host
                                             * 0x1 == enable, 0x0 == disable (default)
                                             */
+#define SET_SPECIAL_ID_TX_HANG_COLD_RESET     0x11 /* Allow cold-reset in tx-hang recover code. */
 
 /* Requires specially compiled firmware (-T option) to have any useful effect. */
 #define SET_SPECIAL_ID_TX_DBG         0x99 /* 0x1 == enable, 0x2 == pkt-dbg, 0x0 == disable (default). */

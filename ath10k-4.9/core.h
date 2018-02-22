@@ -1178,6 +1178,7 @@ struct ath10k {
 		u8 thresh62_ext;
 		u8 rc_rate_max_per_thr; /* Firmware rate-ctrl alg. tuning. */
 		u8 tx_sta_bw_mask; /* 0:  all, 0x1: 20Mhz, 0x2 40Mhz, 0x4 80Mhz */
+		bool tx_hang_cold_reset_ok;
 		bool allow_ibss_amsdu;
 		bool rifs_enable_override;
 		bool txbf_cv_msg;
