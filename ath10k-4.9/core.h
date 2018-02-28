@@ -1159,6 +1159,7 @@ struct ath10k {
 	/* NAPI */
 	struct net_device napi_dev;
 	struct napi_struct napi;
+	bool napi_enabled;
 
 	struct work_struct stop_scan_work;
 

@@ -2971,6 +2971,9 @@ int ath10k_debug_start(struct ath10k *ar)
 				    ret);
 	}
 
+	queue_delayed_work(ar->workqueue, &ar->debug.nop_dwork,
+			   msecs_to_jiffies(ATH10K_DEBUG_NOP_INTERVAL));
+
 	return ret;
 }
 
@@ -2986,6 +2989,8 @@ void ath10k_debug_stop(struct ath10k *ar)
 	 */
 	if (ar->debug.htt_stats_mask != 0)
 		cancel_delayed_work(&ar->debug.htt_stats_dwork);
+
+	cancel_delayed_work(&ar->debug.nop_dwork);
 
 	ath10k_wmi_pdev_pktlog_disable(ar);
 }
@@ -3698,6 +3703,8 @@ int ath10k_debug_create(struct ath10k *ar)
 	INIT_LIST_HEAD(&ar->debug.fw_stats.peers);
 	INIT_LIST_HEAD(&ar->debug.fw_stats.peers_extd);
 
+	INIT_DELAYED_WORK(&ar->debug.nop_dwork, ath10k_debug_nop_dwork);
+
 	return 0;
 }
 
@@ -3712,6 +3719,8 @@ void ath10k_debug_destroy(struct ath10k *ar)
 	ath10k_debug_fw_stats_reset(ar);
 
 	kfree(ar->debug.tpc_stats);
+
+	cancel_delayed_work_sync(&ar->debug.nop_dwork);
 }
 
 int ath10k_debug_register(struct ath10k *ar)
@@ -3724,11 +3733,6 @@ int ath10k_debug_register(struct ath10k *ar)
 
 		return -ENOMEM;
 	}
-
-	INIT_DELAYED_WORK(&ar->debug.nop_dwork, ath10k_debug_nop_dwork);
-
-	queue_delayed_work(ar->workqueue, &ar->debug.nop_dwork,
-			   msecs_to_jiffies(ATH10K_DEBUG_NOP_INTERVAL));
 
 	INIT_DELAYED_WORK(&ar->debug.htt_stats_dwork,
 			  ath10k_debug_htt_stats_dwork);

@@ -1963,6 +1963,7 @@ static int ath10k_pci_hif_start(struct ath10k *ar)
 	ath10k_dbg(ar, ATH10K_DBG_BOOT, "boot hif start\n");
 
 	napi_enable(&ar->napi);
+	ar->napi_enabled = true;
 
 	ath10k_pci_irq_enable(ar);
 	ath10k_pci_rx_post(ar);
@@ -2094,8 +2095,28 @@ static void ath10k_pci_hif_stop(struct ath10k *ar)
 	ath10k_pci_irq_disable(ar);
 	ath10k_pci_irq_sync(ar);
 	ath10k_pci_flush(ar);
-	napi_synchronize(&ar->napi);
-	napi_disable(&ar->napi);
+
+	/* Calling napi_disable twice in a row (w/out starting it and/or without
+	 * having NAPI active leads to deadlock because napi_disable sets
+	 * NAPI_STATE_SCHED and NAPI_STATE_NPSVC when it returns, as far as I
+	 * can tell.  So, guard this call to napi_disable.  I believe the
+	 * failure case is something like this:
+	 * rmmod ath10k_pci ath10k_core
+	 *   Firmware crashes before hif_stop is called by the rmmod path
+	 *   The crash handling logic calls hif_stop
+         *   Then rmmod gets around to calling hif_stop, but spins endlessly
+	 *   in napi_synchronize.
+	 *
+	 *  I think one way this could happen is that ath10k_stop checks
+	 *  for state != ATH10K_STATE_OFF, but STATE_RESTARTING is also
+	 *  a possibility.  That might be how we can have hif_stop called twice
+	 *  without a hif_start in between. --Ben
+	 */
+	if (ar->napi_enabled) {
+		napi_synchronize(&ar->napi);
+		napi_disable(&ar->napi);
+		ar->napi_enabled = false;
+	}
 
 	spin_lock_irqsave(&ar_pci->ps_lock, flags);
 	WARN_ON(ar_pci->ps_wake_refcount > 0);
