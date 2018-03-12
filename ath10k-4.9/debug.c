@@ -549,7 +549,8 @@ void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 		}
 
 		for (i = 0; i < __le16_to_cpu(regdump->count); i++) {
-			switch (__le16_to_cpu(regdump->regpair[i].reg_id)) {
+			u16 id = __le16_to_cpu(regdump->regpair[i].reg_id);
+			switch (id) {
 			case REG_DUMP_NONE:
 				break;
 			case MAC_FILTER_ADDR_L32:
@@ -622,6 +623,19 @@ void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 			case ADC_TEMP:
 				sptr->adc_temp = __le32_to_cpu(regdump->regpair[i].reg_val);
 				break;
+			case NF_CHAINS:
+				sptr->nfcal = __le32_to_cpu(regdump->regpair[i].reg_val);
+				break;
+			default: {
+				/* Foward-compat logic */
+				int max_supported = DBG_REG_DUMP_COUNT + ARRAY_SIZE(sptr->extra_regs);
+				if (id >= DBG_REG_DUMP_COUNT && id < max_supported) {
+					sptr->extra_regs[id - DBG_REG_DUMP_COUNT] = regdump->regpair[i].reg_val;
+					sptr->extras_count = max(sptr->extras_count, (id - DBG_REG_DUMP_COUNT) + 1);
+				}
+				//ath10k_warn(ar, "dbg-regs, max-supported: %d  id: %d  extras-count: %d\n",
+				//	    max_supported, id, sptr->extras_count);
+			} /* default case */
 			}/* switch */
 		}
 		ar->debug.fw_stats_done = true;
@@ -948,6 +962,7 @@ static ssize_t ath10k_read_fw_regs(struct file *file, char __user *user_buf,
 	unsigned int len = 0, buf_len = 8000;
 	ssize_t ret_cnt = 0;
 	int ret;
+	int i;
 
 	fw_regs = &ar->debug.fw_stats;
 
@@ -966,8 +981,8 @@ static ssize_t ath10k_read_fw_regs(struct file *file, char __user *user_buf,
 
 	spin_lock_bh(&ar->data_lock);
 	len += scnprintf(buf + len, buf_len - len, "\n");
-	len += scnprintf(buf + len, buf_len - len, "%30s\n",
-			 "ath10k Target Register Dump");
+	len += scnprintf(buf + len, buf_len - len, "%s (extras-count: %d)\n",
+			 "ath10k Target Register Dump", fw_regs->extras_count);
 	len += scnprintf(buf + len, buf_len - len, "%30s\n\n",
 				 "=================");
 
@@ -1016,7 +1031,18 @@ static ssize_t ath10k_read_fw_regs(struct file *file, char __user *user_buf,
 	len += scnprintf(buf + len, buf_len - len, "%30s 0x%08x\n",
 			 "SW-RXFILTER", fw_regs->sw_rxfilter);
 	len += scnprintf(buf + len, buf_len - len, "%30s 0x%08x\n",
+			 "SHORT-RETRIES", fw_regs->short_retries);
+	len += scnprintf(buf + len, buf_len - len, "%30s 0x%08x\n",
+			 "LONG-RETRIES", fw_regs->long_retries);
+	len += scnprintf(buf + len, buf_len - len, "%30s 0x%08x\n",
 			 "ADC-TEMP", fw_regs->adc_temp);
+	len += scnprintf(buf + len, buf_len - len, "%30s 0x%08x\n",
+			 "NFCAL-PER-CHAIN", fw_regs->nfcal);
+
+	for (i = 0; i<fw_regs->extras_count; i++) {
+		len += scnprintf(buf + len, buf_len - len, "%26s%04d 0x%08x\n",
+				 "", i + DBG_REG_DUMP_COUNT, fw_regs->extra_regs[i]);
+	}
 
 	spin_unlock_bh(&ar->data_lock);
 
@@ -2328,9 +2354,9 @@ int ath10k_debug_get_et_sset_count(struct ieee80211_hw *hw,
 	return 0;
 }
 
-void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
-			       struct ieee80211_vif *vif,
-			       struct ethtool_stats *stats, u64 *data)
+void ath10k_debug_get_et_stats2(struct ieee80211_hw *hw,
+				struct ieee80211_vif *vif,
+				struct ethtool_stats *stats, u64 *data, u32 level)
 {
 	struct ath10k *ar = hw->priv;
 	static const struct ath10k_fw_stats_pdev zero_stats = {};
@@ -2339,6 +2365,9 @@ void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
 	u64 d_flags = 0;
 
 	mutex_lock(&ar->conf_mutex);
+
+	if (level && level < 5)
+		goto skip_query_fw_stats;
 
 	if (ar->state == ATH10K_STATE_ON) {
 		ath10k_refresh_target_regs(ar); /* Request some CT FW stats. */
@@ -2351,6 +2380,7 @@ void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
 		}
 	}
 
+skip_query_fw_stats:
 	pdev_stats = list_first_entry_or_null(&ar->debug.fw_stats.pdevs,
 					      struct ath10k_fw_stats_pdev,
 					      list);
@@ -2435,6 +2465,14 @@ void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
 
 	WARN_ON(i != ATH10K_SSTATS_LEN);
 }
+
+void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
+                              struct ieee80211_vif *vif,
+                              struct ethtool_stats *stats, u64 *data)
+{
+       ath10k_debug_get_et_stats2(hw, vif, stats, data, 0);
+}
+
 
 static const struct file_operations fops_fw_dbglog = {
 	.read = ath10k_read_fw_dbglog,

@@ -901,6 +901,7 @@ static void ath10k_htt_rx_h_ppdu(struct ath10k *ar,
 		status->rate_idx = 0;
 		status->nss = 0;
 		status->encoding = RX_ENC_LEGACY;
+		status->enc_flags = 0;
 		status->bw = RATE_INFO_BW_20;
 		status->flag &= ~RX_FLAG_MACTIME_END;
 		status->flag |= RX_FLAG_NO_SIGNAL_VAL;
@@ -1843,16 +1844,16 @@ static void ath10k_htt_rx_addba(struct ath10k *ar, struct htt_resp *resp)
 	spin_lock_bh(&ar->data_lock);
 	peer = ath10k_peer_find_by_id(ar, peer_id);
 	if (!peer) {
-		ath10k_warn(ar, "received addba event for invalid peer_id: %hu\n",
-			    peer_id);
+		ath10k_warn(ar, "received addba event for invalid peer_id: %hu tid: %d\n",
+			    peer_id, tid);
 		spin_unlock_bh(&ar->data_lock);
 		return;
 	}
 
 	arvif = ath10k_get_arvif(ar, peer->vdev_id);
 	if (!arvif) {
-		ath10k_warn(ar, "received addba event for invalid vdev_id: %u\n",
-			    peer->vdev_id);
+		ath10k_warn(ar, "received addba event for invalid vdev_id: %u peer_id: %hu tid: %d\n",
+			    peer->vdev_id, peer_id, tid);
 		spin_unlock_bh(&ar->data_lock);
 		return;
 	}

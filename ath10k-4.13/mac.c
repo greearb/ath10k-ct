@@ -8472,6 +8472,9 @@ static const struct ieee80211_ops ath10k_ops = {
 	.ampdu_action			= ath10k_ampdu_action,
 	.get_et_sset_count		= ath10k_debug_get_et_sset_count,
 	.get_et_stats			= ath10k_debug_get_et_stats,
+#ifdef MAC80211_HAS_ET_STATS2
+	.get_et_stats2			= ath10k_debug_get_et_stats2,
+#endif
 	.get_et_strings			= ath10k_debug_get_et_strings,
 	.add_chanctx			= ath10k_mac_op_add_chanctx,
 	.remove_chanctx			= ath10k_mac_op_remove_chanctx,

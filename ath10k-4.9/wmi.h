@@ -4267,9 +4267,10 @@ struct wmi_pdev_stats_peer {
 #define SW_LONG_RETRIES      21 /* DATA packet retries */
 #define SW_SHORT_RETRIES     22 /* RTS packet retries */
 #define ADC_TEMP             23 /* ADC Temperature readings. */
+#define NF_CHAINS            24 /* noise floor for chains */
 
 
-#define REG_DUMP_COUNT       23 /* max number of registers to dump at once. */
+#define DBG_REG_DUMP_COUNT       25 /* max number of registers we know about. */
 
 struct ath10k_reg_dump_pair {
 	__le32 reg_id;
@@ -4279,7 +4280,7 @@ struct ath10k_reg_dump_pair {
 struct ath10k_reg_dump {
 	__le16 count;
 	__le16 unused;
-	struct ath10k_reg_dump_pair regpair[REG_DUMP_COUNT];
+	struct ath10k_reg_dump_pair regpair[DBG_REG_DUMP_COUNT + 20];
 };
 
 /* These values are a bitmap, but 10.1.x (at least) firmware will not properly

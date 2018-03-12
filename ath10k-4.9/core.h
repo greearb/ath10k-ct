@@ -282,6 +282,7 @@ struct ath10k_fw_stats {
 	struct list_head peers_extd;
 
 	/* Register and related dump, CT firmware only. */
+	int extras_count; /* How many extras do we have assigned? */
 	u32 mac_filter_addr_l32;
 	u32 mac_filter_addr_u16;
 	u32 dcu_slot_time;
@@ -309,6 +310,9 @@ struct ath10k_fw_stats {
 		       * Value of 0x78 for 2,3 means not-read/not-active,
 		       * and 0x7B for 0,1 mean means the same.
 		       */
+	u32 nfcal; /* per-chain noise-floor calibration, signed 8 bit nums
+		    * packed into u32 */
+	u32 extra_regs[20]; /* for forward-compat */
 };
 
 #define ATH10K_TPC_TABLE_TYPE_FLAG	1

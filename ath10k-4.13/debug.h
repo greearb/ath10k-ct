@@ -108,6 +108,9 @@ int ath10k_debug_get_et_sset_count(struct ieee80211_hw *hw,
 void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
 			       struct ieee80211_vif *vif,
 			       struct ethtool_stats *stats, u64 *data);
+void ath10k_debug_get_et_stats2(struct ieee80211_hw *hw,
+				struct ieee80211_vif *vif,
+				struct ethtool_stats *stats, u64 *data, u32 level);
 
 static inline u64 ath10k_debug_get_fw_dbglog_mask(struct ath10k *ar)
 {
