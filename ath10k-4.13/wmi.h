@@ -6726,6 +6726,7 @@ struct wmi_pdev_set_special_cmd {
                                             * 0x1 == enable, 0x0 == disable (default)
                                             */
 #define SET_SPECIAL_ID_TX_HANG_COLD_RESET     0x11 /* Allow cold-reset in tx-hang recover code. */
+#define SET_SPECIAL_ID_DISABLE_IBSS_CCA       0x12 /* Disable special HWSCH CCA settings for IBSS. */
 
 /* Requires specially compiled firmware (-T option) to have any useful effect. */
 #define SET_SPECIAL_ID_TX_DBG         0x99 /* 0x1 == enable, 0x2 == pkt-dbg, 0x0 == disable (default). */

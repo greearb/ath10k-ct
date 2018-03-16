@@ -1186,6 +1186,7 @@ struct ath10k {
 		struct ath10k_spec_scan config;
 	} spectral;
 #endif
+	u32 wmi_get_temp_count;
 
 	struct {
 		/* protected by conf_mutex */
@@ -1248,6 +1249,7 @@ struct ath10k {
 		bool coverage_already_set;
 		bool txbf_cv_msg;
 		bool rx_all_mgt;
+		u8 disable_ibss_cca;
 		u8 rc_txbf_probe;
 #define CT_DISABLE_20MHZ  0x1
 #define CT_DISABLE_40MHZ  0x2

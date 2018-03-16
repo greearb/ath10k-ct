@@ -34,7 +34,9 @@
 #include "testmode.h"
 #include "wmi-ops.h"
 
-unsigned int ath10k_debug_mask;
+/* Disable ath10k-ct DBGLOG output by default */
+unsigned int ath10k_debug_mask = ATH10K_DBG_NO_DBGLOG;
+
 static unsigned int ath10k_cryptmode_param;
 static bool uart_print;
 static bool skip_otp;
@@ -2821,6 +2823,10 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		if (ar->eeprom_overrides.tx_debug)
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_TX_DBG,
 						    ar->eeprom_overrides.tx_debug);
+
+		if (ar->eeprom_overrides.disable_ibss_cca)
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_DISABLE_IBSS_CCA,
+						    ar->eeprom_overrides.disable_ibss_cca);
 
 		if (ar->eeprom_overrides.su_sounding_timer_ms)
 			ath10k_wmi_pdev_set_param(ar, ar->wmi.pdev_param->txbf_sound_period_cmdid,
