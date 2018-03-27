@@ -17,4 +17,9 @@ cp -ar ~/git/linux-$KVER.dev.y/drivers/net/wireless/ath/ath10k/* ./ath10k-$KVER
 KVER=4.13
 cp -ar ~/git/linux-$KVER.dev.y/drivers/net/wireless/ath/ath10k/* ./ath10k-$KVER
 
+# And for 4.16 kernel
+KVER=4.16
+mkdir -p ./ath10k-$KVER
+cp -ar ~/git/linux-$KVER.dev.y/drivers/net/wireless/ath/ath10k/* ./ath10k-$KVER
+
 
