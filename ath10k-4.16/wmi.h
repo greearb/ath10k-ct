@@ -1488,6 +1488,7 @@ enum wmi_10x_event_id {
 	WMI_10X_GPIO_INPUT_EVENTID,
 
 	WMI_10_1_PDEV_TEMPERATURE_EVENTID = 36898, /* Newer CT firmware */
+	WMI_10_1_PDEV_BSS_CHAN_INFO_EVENTID = 36900, /* Newer CT firmware */
 	WMI_10X_PDEV_UTF_EVENTID = WMI_10X_END_EVENTID - 1,
 };
 
@@ -4726,6 +4727,12 @@ struct wmi_peer_stats {
 struct wmi_10x_peer_stats {
 	struct wmi_peer_stats old;
 	__le32 peer_rx_rate;
+} __packed;
+
+struct wmi_10x_peer_stats_ct_ext {
+	struct wmi_peer_stats old;
+	__le32 peer_rx_rate;
+	__le32 rx_duration;
 } __packed;
 
 struct wmi_10_2_peer_stats {

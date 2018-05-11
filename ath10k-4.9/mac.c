@@ -2797,17 +2797,39 @@ static void ath10k_peer_assoc_h_vht(struct ath10k *ar,
 		   arg->peer_vht_rates.rx_max_rate, arg->peer_vht_rates.rx_mcs_set,
 		   arg->peer_vht_rates.tx_max_rate, arg->peer_vht_rates.tx_mcs_set);
 
-	if ((arg->peer_vht_rates.rx_max_rate) &&
-	    (sta->vht_cap.cap & IEEE80211_VHT_CAP_SUPP_CHAN_WIDTH_MASK)) {
-		if ((arg->peer_num_spatial_streams > 1) &&
-		    (arg->peer_vht_rates.rx_max_rate == 1560)) {
+	if (arg->peer_phymode == MODE_11AC_VHT80_80 ||
+	    arg->peer_phymode == MODE_11AC_VHT160) {
+		int nss160;
+		int rx = arg->peer_vht_rates.rx_max_rate;
+		/* Deal with cases where chainmask has been decreased.
+		 * All known chips that support 160Mhz can do only 1/2 of
+		 * the available chains at 160Mhz.
+		 */
+		rx = min((int)(arg->peer_num_spatial_streams * 390), rx);
+
+		switch (rx) {
+			/* When a NIC shows up that can do 4x4 at 160Mhz, its
+			 * max-rate should be higher, and we can set nss160
+			 * to 4 here.
+			 */
+		case 1560:
 			/* Must be 2x2 at 160Mhz is all it can do. */
-			arg->peer_bw_rxnss_override = 2;
+			nss160 = 2;
+			break;
+		default:
+			/* Assume we can only do 1x1 at 160Mhz */
+			nss160 = 1;
+			break;
 		}
-		else if (arg->peer_vht_rates.rx_max_rate == 780) {
-			/* Can only do 1x2 at 160Mhz (Long Guard Interval) */
-			arg->peer_bw_rxnss_override = 1;
-		}
+
+		arg->peer_bw_rxnss_override = ((nss160 - 1) | /* 160Mhz nss */
+					       ((nss160 - 1) << 3) | /* 80+80 nss */
+					       BIT(PEER_BW_RXNSS_OVERRIDE_OFFSET));
+
+		ath10k_warn(ar, "NIC rx-max-rate: %d calculated-max: %d rxnss_override: 0x%x  nss160: %d  spatial-streams: %d\n",
+			    arg->peer_vht_rates.rx_max_rate, rx,
+			    arg->peer_bw_rxnss_override, nss160,
+			    arg->peer_num_spatial_streams);
 	}
 }
 
@@ -3039,9 +3061,9 @@ static int ath10k_peer_assoc_prepare(struct ath10k *ar,
 	ath10k_peer_assoc_h_crypto(ar, vif, sta, arg);
 	ath10k_peer_assoc_h_rates(ar, vif, sta, arg);
 	ath10k_peer_assoc_h_ht(ar, vif, sta, arg);
+	ath10k_peer_assoc_h_phymode(ar, vif, sta, arg);
 	ath10k_peer_assoc_h_vht(ar, vif, sta, arg);
 	ath10k_peer_assoc_h_qos(ar, vif, sta, arg);
-	ath10k_peer_assoc_h_phymode(ar, vif, sta, arg);
 
 	ath10k_peer_assoc_h_rate_overrides(ar, vif, sta, arg);
 
@@ -7387,7 +7409,8 @@ ath10k_mac_update_bss_chan_survey(struct ath10k *ar,
 
 	ret = ath10k_wmi_pdev_bss_chan_info_request(ar, type);
 	if (ret) {
-		ath10k_warn(ar, "failed to send pdev bss chan info request\n");
+		ath10k_warn(ar, "failed to send pdev bss chan info request: %d\n",
+			    ret);
 		return;
 	}
 
@@ -8748,6 +8771,8 @@ static struct ieee80211_iface_combination ath10k_10_4_ct_if_comb[] = {
 		.radar_detect_widths =	BIT(NL80211_CHAN_WIDTH_20_NOHT) |
 					BIT(NL80211_CHAN_WIDTH_20) |
 					BIT(NL80211_CHAN_WIDTH_40) |
+					BIT(NL80211_CHAN_WIDTH_80P80) | /* TODO:  Verify --Ben */
+					BIT(NL80211_CHAN_WIDTH_160) | /* TODO:  Verify --Ben */
 					BIT(NL80211_CHAN_WIDTH_80),
 #endif
 	},

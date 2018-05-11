@@ -125,7 +125,8 @@ int ath10k_bmi_get_target_info_sdio(struct ath10k *ar,
 	resplen = sizeof(u32);
 	ret = ath10k_hif_exchange_bmi_msg(ar, &cmd, cmdlen, &tmp, &resplen);
 	if (ret) {
-		ath10k_warn(ar, "unable to read from device\n");
+		ath10k_warn(ar, "unable to read from device, tgt-info, ret: %d\n",
+			    ret);
 		return ret;
 	}
 
@@ -138,7 +139,8 @@ int ath10k_bmi_get_target_info_sdio(struct ath10k *ar,
 		ret = ath10k_hif_exchange_bmi_msg(ar, NULL, 0, &tmp,
 						  &resplen);
 		if (ret) {
-			ath10k_warn(ar, "unable to read from device\n");
+			ath10k_warn(ar, "unable to read from device, sentinal, ret: %d\n",
+				ret);
 			return ret;
 		}
 	}
@@ -158,7 +160,8 @@ int ath10k_bmi_get_target_info_sdio(struct ath10k *ar,
 					  &resp.get_target_info.version,
 					  &resplen);
 	if (ret) {
-		ath10k_warn(ar, "unable to read from device\n");
+		ath10k_warn(ar, "unable to read from device, rest-of-version-resp, ret: %d\n",
+			    ret);
 		return ret;
 	}
 
@@ -195,7 +198,7 @@ int ath10k_bmi_read_memory(struct ath10k *ar,
 		ret = ath10k_hif_exchange_bmi_msg(ar, &cmd, cmdlen,
 						  &resp, &rxlen);
 		if (ret) {
-			ath10k_warn(ar, "unable to read from the device (%d)\n",
+			ath10k_warn(ar, "unable to read from the device, bmi-read-mem (%d)\n",
 				    ret);
 			return ret;
 		}
@@ -340,7 +343,8 @@ int ath10k_bmi_execute(struct ath10k *ar, u32 address, u32 param, u32 *result)
 
 	ret = ath10k_hif_exchange_bmi_msg(ar, &cmd, cmdlen, &resp, &resplen);
 	if (ret) {
-		ath10k_warn(ar, "unable to read from the device\n");
+		ath10k_warn(ar, "unable to read from the device, execute bmi, ret: %d\n",
+			    ret);
 		return ret;
 	}
 
