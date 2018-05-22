@@ -5825,6 +5825,8 @@ static struct sk_buff *ath10k_wmi_10_1_op_gen_init(struct ath10k *ar)
 
 	if (test_bit(ATH10K_FW_FEATURE_WMI_10X_CT,
 		     ar->running_fw->fw_file.fw_features)) {
+		u32 features = 0;
+
 		if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
 			     ar->running_fw->fw_file.fw_features) &&
 		    ar->request_nohwcrypt) {
@@ -5852,6 +5854,19 @@ static struct sk_buff *ath10k_wmi_10_1_op_gen_init(struct ath10k *ar)
 				    ar->num_ratectrl_objs);
 			config.tx_chain_mask |= __cpu_to_le32(ar->num_ratectrl_objs << 24);
 		}
+
+		if (test_bit(ATH10K_FLAG_BTCOEX, &ar->dev_flags) &&
+		    test_bit(WMI_SERVICE_COEX_GPIO, ar->wmi.svc_map))
+			features |= WMI_10_2_COEX_GPIO;
+
+		if (ath10k_peer_stats_enabled(ar))
+			features |= WMI_10_2_PEER_STATS;
+
+		if (test_bit(WMI_SERVICE_BSS_CHANNEL_INFO_64, ar->wmi.svc_map))
+			features |= WMI_10_2_BSS_CHAN_INFO;
+
+		config.rx_decap_mode |= __cpu_to_le32(features << 24);
+		ath10k_info(ar, "10.1 features for rx-decap-mode: 0x%x\n", features);
 	}
 	config.num_msdu_desc = __cpu_to_le32(ar->htt.max_num_pending_tx);
 	config.ast_skid_limit = __cpu_to_le32(ar->skid_limit);
@@ -5936,7 +5951,6 @@ static struct sk_buff *ath10k_wmi_10_2_op_gen_init(struct ath10k *ar)
 
 	if (test_bit(ATH10K_FW_FEATURE_WMI_10X_CT,
 		     ar->running_fw->fw_file.fw_features)) {
-		u32 features = 0;
 
 		if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
 			     ar->running_fw->fw_file.fw_features) &&
@@ -5969,18 +5983,6 @@ static struct sk_buff *ath10k_wmi_10_2_op_gen_init(struct ath10k *ar)
 				    ar->num_ratectrl_objs);
 			config.tx_chain_mask |= __cpu_to_le32(ar->num_ratectrl_objs << 24);
 		}
-
-		if (test_bit(ATH10K_FLAG_BTCOEX, &ar->dev_flags) &&
-		    test_bit(WMI_SERVICE_COEX_GPIO, ar->wmi.svc_map))
-			features |= WMI_10_2_COEX_GPIO;
-
-		if (ath10k_peer_stats_enabled(ar))
-			features |= WMI_10_2_PEER_STATS;
-
-		if (test_bit(WMI_SERVICE_BSS_CHANNEL_INFO_64, ar->wmi.svc_map))
-			features |= WMI_10_2_BSS_CHAN_INFO;
-
-		config.rx_decap_mode |= __cpu_to_le32(features << 24);
 	}
 	config.num_msdu_desc = __cpu_to_le32(ar->htt.max_num_pending_tx);
 	config.ast_skid_limit = __cpu_to_le32(ar->skid_limit);
