@@ -1238,7 +1238,7 @@ static ssize_t ath10k_write_set_rates(struct file *file,
 	if (ret) {
 		ath10k_warn(ar, "set-rates: vdev %i failed to set fixed rate, param 0x%x rate-code 0x%02lx\n",
 			    arvif->vdev_id, set_rate_type, rc);
-		return ret;
+		goto exit;
 	}
 
 	ath10k_warn(ar, "set-rates, vdev %i type: 0x%x rc: 0x%lx band: %d\n",
