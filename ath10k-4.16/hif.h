@@ -130,12 +130,14 @@ static inline int ath10k_hif_exchange_bmi_msg(struct ath10k *ar,
 
 static inline int ath10k_hif_start(struct ath10k *ar)
 {
+	ar->hif_running = true;
 	return ar->hif.ops->start(ar);
 }
 
 static inline void ath10k_hif_stop(struct ath10k *ar)
 {
-	return ar->hif.ops->stop(ar);
+	ar->hif_running = false;
+	ar->hif.ops->stop(ar);
 }
 
 static inline int ath10k_hif_map_service_to_pipe(struct ath10k *ar,

@@ -976,6 +976,7 @@ struct ath10k {
 	bool p2p;
 	bool ct_all_pkts_htt; /* CT firmware only: native-wifi for all pkts */
 
+	bool hif_running; /* Should we be processing IRQs or not? */
 	struct {
 		enum ath10k_bus bus;
 		const struct ath10k_hif_ops *ops;

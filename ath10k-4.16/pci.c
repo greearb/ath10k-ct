@@ -3349,6 +3349,9 @@ static irqreturn_t ath10k_pci_interrupt_handler(int irq, void *arg)
 	if (ath10k_pci_has_device_gone(ar))
 		return IRQ_NONE;
 
+	if (!ar->hif_running)
+		return IRQ_NONE;
+
 	ret = ath10k_pci_force_wake(ar);
 	if (ret) {
 		ath10k_warn(ar, "failed to wake device up on irq: %d\n", ret);
