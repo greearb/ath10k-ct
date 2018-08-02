@@ -1044,7 +1044,7 @@ static inline int ath10k_vdev_setup_sync(struct ath10k *ar)
 	if (time_left == 0)
 		return -ETIMEDOUT;
 
-	return 0;
+	return ar->last_wmi_vdev_start_status;
 }
 
 static int ath10k_monitor_vdev_start(struct ath10k *ar, int vdev_id)
@@ -2015,6 +2015,16 @@ static int ath10k_mac_vif_setup_ps(struct ath10k_vif *arvif)
 	}
 
 	return 0;
+}
+
+static int ath10k_mac_vif_config_retry_limit(struct ath10k_vif *arvif, int limit)
+{
+	struct ath10k *ar = arvif->ar;
+	int vdev_param = ar->wmi.vdev_param->rc_num_retries;
+
+	lockdep_assert_held(&arvif->ar->conf_mutex);
+
+	return ath10k_wmi_vdev_set_param(ar, arvif->vdev_id, vdev_param, limit);
 }
 
 static int ath10k_mac_vif_disable_keepalive(struct ath10k_vif *arvif)
@@ -5475,6 +5485,36 @@ static int ath10k_config_ps(struct ath10k *ar)
 	return ret;
 }
 
+static int ath10k_config_retry_limit(struct ath10k *ar, int limit)
+{
+	struct ath10k_vif *arvif;
+	int ret = 0;
+
+	lockdep_assert_held(&ar->conf_mutex);
+
+	if (limit > 2 && !(test_bit(ATH10K_FW_FEATURE_RETRY_GT2_CT,
+				    ar->running_fw->fw_file.fw_features))) {
+		/* Stock wave-1 firmware (at least) will crash if there are > 2
+		 * retries made, due to coding issues related to rate-ctrl
+		 * logic in the firmware.  So, we can only enable this feature
+		 * if firmware specifically tells us the feature is supported.
+		 */
+		ath10k_warn(ar, "Firmware lacks feature flag indicating a retry limit of > 2 is OK, requested limit: %d\n",
+			    limit);
+		return -EINVAL;
+	}
+
+	list_for_each_entry(arvif, &ar->arvifs, list) {
+		ret = ath10k_mac_vif_config_retry_limit(arvif, limit);
+		if (ret) {
+			ath10k_warn(ar, "failed to setup retry-limit: %d\n", ret);
+			break;
+		}
+	}
+
+	return ret;
+}
+
 static int ath10k_mac_txpower_setup(struct ath10k *ar, int txpower)
 {
 	int ret;
@@ -5550,6 +5590,9 @@ static int ath10k_config(struct ieee80211_hw *hw, u32 changed)
 		if (ret)
 			ath10k_warn(ar, "failed to recalc monitor: %d\n", ret);
 	}
+
+	if (changed & IEEE80211_CONF_CHANGE_RETRY_LIMITS)
+		ret = ath10k_config_retry_limit(ar, conf->long_frame_max_tx_count);
 
 	mutex_unlock(&ar->conf_mutex);
 	return ret;

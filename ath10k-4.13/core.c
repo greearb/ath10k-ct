@@ -403,6 +403,7 @@ static const char *const ath10k_core_fw_feature_str[] = {
 	[ATH10K_FW_FEATURE_HAS_GET_TEMP_CT] = "get-temp-CT",
 	[ATH10K_FW_FEATURE_HAS_TX_RC_CT] = "tx-rc-CT",
 	[ATH10K_FW_FEATURE_CUST_STATS_CT] = "cust-stats-CT",
+	[ATH10K_FW_FEATURE_RETRY_GT2_CT] = "retry-gt2-CT",
 };
 
 static unsigned int ath10k_core_get_fw_feature_str(char *buf,

@@ -1054,7 +1054,7 @@ static inline int ath10k_vdev_setup_sync(struct ath10k *ar)
 	if (time_left == 0)
 		return -ETIMEDOUT;
 
-	return 0;
+	return ar->last_wmi_vdev_start_status;
 }
 
 static int ath10k_monitor_vdev_start(struct ath10k *ar, int vdev_id)
@@ -2025,6 +2025,16 @@ static int ath10k_mac_vif_setup_ps(struct ath10k_vif *arvif)
 	}
 
 	return 0;
+}
+
+static int ath10k_mac_vif_config_retry_limit(struct ath10k_vif *arvif, int limit)
+{
+	struct ath10k *ar = arvif->ar;
+	int vdev_param = ar->wmi.vdev_param->rc_num_retries;
+
+	lockdep_assert_held(&arvif->ar->conf_mutex);
+
+	return ath10k_wmi_vdev_set_param(ar, arvif->vdev_id, vdev_param, limit);
 }
 
 static int ath10k_mac_vif_disable_keepalive(struct ath10k_vif *arvif)
@@ -4616,7 +4626,36 @@ int ath10k_mac_tx_push_txq(struct ieee80211_hw *hw,
 	if (ret)
 		return ret;
 
+	/* Add debugging for this crash Brent saw in station reset test */
+	/* FW crashed, then kernel */
+	/*
+	Call Trace:
+ <IRQ>
+ ? dma_pte_clear_level+0x111/0x190
+ ? dma_pte_clear_level+0x111/0x190
+ ath10k_mac_tx_push_txq+0x6f/0x210 [ath10k_core]  # Decodes to the:  if (!skb) line below
+ ath10k_mac_tx_push_pending+0x154/0x1e0 [ath10k_core]
+ ath10k_htt_txrx_compl_task+0xede/0x1780 [ath10k_core]
+ ? ath10k_htc_process_trailer+0x300/0x300 [ath10k_core]
+ ? ath10k_ce_per_engine_service+0xc9/0xe0 [ath10k_pci]
+ ? ath10k_bus_pci_write32+0x3c/0xa0 [ath10k_pci]
+ ath10k_pci_napi_poll+0x44/0xe0 [ath10k_pci]
+ net_rx_action+0x250/0x3b0
+ __do_softirq+0xc2/0x2a3
+ irq_exit+0x7d/0x80
+ do_IRQ+0x45/0xc0
+ common_interrupt+0xf/0xf
+		*/
+	if (WARN_ON(((unsigned long)(txq)) < 4000))
+		return -ENOENT;
+	if (WARN_ON(((unsigned long)(hw)) < 4000))
+		return -ENOENT;
+
 	skb = ieee80211_tx_dequeue(hw, txq);
+
+	if (WARN_ON((((unsigned long)(skb)) < 4000) && (((unsigned long)(skb)) > 0)))
+		return -ENOENT;
+
 	if (!skb) {
 		spin_lock_bh(&ar->htt.tx_lock);
 		ath10k_htt_tx_dec_pending(htt);
@@ -5487,6 +5526,36 @@ static int ath10k_config_ps(struct ath10k *ar)
 	return ret;
 }
 
+static int ath10k_config_retry_limit(struct ath10k *ar, int limit)
+{
+	struct ath10k_vif *arvif;
+	int ret = 0;
+
+	lockdep_assert_held(&ar->conf_mutex);
+
+	if (limit > 2 && !(test_bit(ATH10K_FW_FEATURE_RETRY_GT2_CT,
+				    ar->running_fw->fw_file.fw_features))) {
+		/* Stock wave-1 firmware (at least) will crash if there are > 2
+		 * retries made, due to coding issues related to rate-ctrl
+		 * logic in the firmware.  So, we can only enable this feature
+		 * if firmware specifically tells us the feature is supported.
+		 */
+		ath10k_warn(ar, "Firmware lacks feature flag indicating a retry limit of > 2 is OK, requested limit: %d\n",
+			    limit);
+		return -EINVAL;
+	}
+
+	list_for_each_entry(arvif, &ar->arvifs, list) {
+		ret = ath10k_mac_vif_config_retry_limit(arvif, limit);
+		if (ret) {
+			ath10k_warn(ar, "failed to setup retry-limit: %d\n", ret);
+			break;
+		}
+	}
+
+	return ret;
+}
+
 static int ath10k_mac_txpower_setup(struct ath10k *ar, int txpower)
 {
 	int ret;
@@ -5562,6 +5631,9 @@ static int ath10k_config(struct ieee80211_hw *hw, u32 changed)
 		if (ret)
 			ath10k_warn(ar, "failed to recalc monitor: %d\n", ret);
 	}
+
+	if (changed & IEEE80211_CONF_CHANGE_RETRY_LIMITS)
+		ret = ath10k_config_retry_limit(ar, conf->long_frame_max_tx_count);
 
 	mutex_unlock(&ar->conf_mutex);
 	return ret;
@@ -7947,9 +8019,19 @@ static void ath10k_sta_rc_update(struct ieee80211_hw *hw,
 {
 	struct ath10k *ar = hw->priv;
 	struct ath10k_sta *arsta = (struct ath10k_sta *)sta->drv_priv;
+	struct ath10k_vif *arvif = (void *)vif->drv_priv;
+	struct ath10k_peer *peer;
 	u32 bw, smps;
 
 	spin_lock_bh(&ar->data_lock);
+
+	peer = ath10k_peer_find(ar, arvif->vdev_id, sta->addr);
+	if (!peer) {
+		spin_unlock_bh(&ar->data_lock);
+		ath10k_warn(ar, "mac sta rc update failed to find peer %pM on vdev %i\n",
+			    sta->addr, arvif->vdev_id);
+		return;
+	}
 
 	ath10k_dbg(ar, ATH10K_DBG_MAC,
 		   "mac sta rc update for %pM changed %08x bw %d nss %d smps %d\n",
@@ -8762,6 +8844,7 @@ static struct ieee80211_iface_combination ath10k_10x_if_comb[] = {
 		.max_interfaces = 8,
 		.num_different_channels = 1,
 		.beacon_int_infra_match = true,
+		.beacon_int_min_gcd = 1,
 #ifdef CONFIG_ATH10K_DFS_CERTIFIED
 		.radar_detect_widths =	BIT(NL80211_CHAN_WIDTH_20_NOHT) |
 					BIT(NL80211_CHAN_WIDTH_20) |
@@ -8903,6 +8986,7 @@ static const struct ieee80211_iface_combination ath10k_10_4_if_comb[] = {
 		.max_interfaces = 16,
 		.num_different_channels = 1,
 		.beacon_int_infra_match = true,
+		.beacon_int_min_gcd = 1,
 #ifdef CONFIG_ATH10K_DFS_CERTIFIED
 		.radar_detect_widths =	BIT(NL80211_CHAN_WIDTH_20_NOHT) |
 					BIT(NL80211_CHAN_WIDTH_20) |

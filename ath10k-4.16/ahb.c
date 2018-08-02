@@ -665,13 +665,13 @@ static void ath10k_ahb_hif_stop(struct ath10k *ar)
 	ath10k_ahb_irq_disable(ar);
 	synchronize_irq(ar_ahb->irq);
 
-	ath10k_pci_flush(ar);
-
 	if (ar->napi_enabled) {
 		napi_synchronize(&ar->napi);
 		napi_disable(&ar->napi);
 		ar->napi_enabled = false;
 	}
+
+	ath10k_pci_flush(ar);
 }
 
 static int ath10k_ahb_hif_power_up(struct ath10k *ar)

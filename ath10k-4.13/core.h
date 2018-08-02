@@ -772,6 +772,9 @@ enum ath10k_fw_features {
 	/* Do we support requesting custom stats */
 	ATH10K_FW_FEATURE_CUST_STATS_CT = 46,
 
+	/* Can the firmware handle a retry limit greater than 2? */
+	ATH10K_FW_FEATURE_RETRY_GT2_CT = 47,
+
 	/* keep last */
 	ATH10K_FW_FEATURE_COUNT,
 };
@@ -1100,6 +1103,7 @@ struct ath10k {
 
 	struct completion install_key_done;
 
+	int last_wmi_vdev_start_status;
 	struct completion vdev_setup_done;
 
 	struct workqueue_struct *workqueue;

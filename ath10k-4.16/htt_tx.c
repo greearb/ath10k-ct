@@ -1060,7 +1060,7 @@ static u8 ath10k_htt_tx_get_tid(struct sk_buff *skb, bool is_eth)
 	else if (ieee80211_is_nullfunc(hdr->frame_control))
 		return HTT_DATA_TX_EXT_TID_NON_QOS_MCAST_BCAST;
 	else if (cb->flags & ATH10K_SKB_F_QOS)
-		return skb->priority % IEEE80211_QOS_CTL_TID_MASK;
+		return skb->priority & IEEE80211_QOS_CTL_TID_MASK;
 	else
 		return HTT_DATA_TX_EXT_TID_NON_QOS_MCAST_BCAST;
 }
@@ -1172,6 +1172,18 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 	struct htt_msdu_ext_desc *ext_desc = NULL;
 	struct htt_msdu_ext_desc *ext_desc_t = NULL;
 	u32 peer_id = HTT_INVALID_PEERID;
+
+	if (ar->state != ATH10K_STATE_ON) {
+		static bool done_once = 0;
+		if (!done_once) {
+			done_once = true;
+			ath10k_err(ar, "Invalid state: %d in ath10k_htt_tx_32, warning will not be repeated.\n",
+				   ar->state);
+			WARN_ON(1);
+		}
+		res = -ENODEV;
+		goto err;
+	}
 
 	if (unlikely(info->flags & IEEE80211_TX_CTL_TX_OFFCHAN))
 		freq = ar->scan.roc_freq;
@@ -1408,6 +1420,18 @@ static int ath10k_htt_tx_64(struct ath10k_htt *htt,
 	u32 txbuf_paddr;
 	struct htt_msdu_ext_desc_64 *ext_desc = NULL;
 	struct htt_msdu_ext_desc_64 *ext_desc_t = NULL;
+
+	if (ar->state != ATH10K_STATE_ON) {
+		static bool done_once = 0;
+		if (!done_once) {
+			done_once = true;
+			ath10k_err(ar, "Invalid state: %d in ath10k_htt_tx_64, warning will not be repeated.\n",
+				   ar->state);
+			WARN_ON(1);
+		}
+		res = -ENODEV;
+		goto err;
+	}
 
 	spin_lock_bh(&htt->tx_lock);
 	res = ath10k_htt_tx_alloc_msdu_id(htt, msdu);

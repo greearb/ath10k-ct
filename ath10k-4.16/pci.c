@@ -2313,7 +2313,6 @@ static void ath10k_pci_hif_stop(struct ath10k *ar)
 
 	ath10k_pci_irq_disable(ar);
 	ath10k_pci_irq_sync(ar);
-	ath10k_pci_flush(ar);
 
 	/* Calling napi_disable twice in a row (w/out starting it and/or without
 	 * having NAPI active leads to deadlock because napi_disable sets
@@ -2336,6 +2335,8 @@ static void ath10k_pci_hif_stop(struct ath10k *ar)
 		napi_disable(&ar->napi);
 		ar->napi_enabled = false;
 	}
+
+	ath10k_pci_flush(ar);
 
 	spin_lock_irqsave(&ar_pci->ps_lock, flags);
 	WARN_ON(ar_pci->ps_wake_refcount > 0);
