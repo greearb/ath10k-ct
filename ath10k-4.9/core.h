@@ -195,6 +195,8 @@ struct ath10k_fw_stats_vdev {
 	u32 num_tx_not_acked;
 	u32 tx_rate_history[10];
 	u32 beacon_rssi_history[10];
+
+	u64 tsf64; /* ct fw only */
 };
 
 struct ath10k_fw_stats_pdev {

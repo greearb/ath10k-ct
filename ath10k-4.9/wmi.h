@@ -2262,6 +2262,10 @@ struct wmi_resource_config {
 	 * that do not need WoW.
 	 */
 	#define ATH10k_DISABLE_WOW        0x40000
+	/* Ask CT firmware to send back per-chain management frame RSSI info */
+	#define ATH10k_MGT_CHAIN_RSSI_OK  0x80000
+	#define ATH10k_VDEV_CT_STATS_OK  0x100000
+	/* NOTE:  High 8 bits are spoken for, 'features' */
 	__le32 rx_decap_mode;
 
 	/* what is the maximum number of scan requests that can be queued */
@@ -6273,6 +6277,13 @@ struct wmi_10_4_peer_assoc_complete_cmd_ct {
 	struct wmi_10_4_peer_assoc_complete_cmd cmd;
 	struct wmi_ct_assoc_overrides overrides;
 } __packed;
+
+struct wmi_vdev_stats_ct {
+    u32 vdev_id;
+    u32 size; /* size in bytes of this struct */
+    u32 tsf_lo;
+    u32 tsf_hi;
+};
 
 struct wmi_peer_assoc_complete_arg {
 	u8 addr[ETH_ALEN];

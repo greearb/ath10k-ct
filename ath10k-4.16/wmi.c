@@ -3085,7 +3085,34 @@ static int ath10k_wmi_10x_op_pull_fw_stats(struct ath10k *ar,
 		list_add_tail(&dst->list, &stats->pdevs);
 	}
 
-	/* fw doesn't implement vdev stats */
+	/* (stock) fw doesn't implement vdev stats */
+	for (i = 0; i < num_vdev_stats; i++) {
+		const struct wmi_vdev_stats_ct *src = (void *)(skb->data);
+		struct ath10k_fw_stats_vdev *dst;
+		int sz;
+
+		if (!skb_pull(skb, sizeof(*src)))
+			return -EPROTO;
+
+		/* Look for any existing vdev */
+		dst = kzalloc(sizeof(*dst), GFP_ATOMIC);
+		if (!dst)
+			continue;
+
+		sz = __le32_to_cpu(src->size);
+		dst->vdev_id = src->vdev_id;
+		dst->tsf64 = __le32_to_cpu(src->tsf_hi);
+		dst->tsf64 <<= 32;
+		dst->tsf64 |= __le32_to_cpu(src->tsf_lo);
+
+		list_add_tail(&dst->list, &stats->vdevs);
+
+		if (sz > sizeof(*src)) {
+			/* Discard any extra for forwards-compat */
+			if (!skb_pull(skb, sz - sizeof(*src)))
+				return -EPROTO;
+		}
+	}
 
 	for (i = 0; i < num_peer_stats; i++) {
 		const struct wmi_10x_peer_stats *src;
@@ -6249,7 +6276,8 @@ static struct sk_buff *ath10k_wmi_10_1_op_gen_init(struct ath10k *ar)
 		else if (ar->request_nohwcrypt) {
 			ath10k_err(ar, "nohwcrypt requested, but firmware does not support this feature.  Disabling swcrypt.\n");
 		}
-		config.rx_decap_mode |= __cpu_to_le32(ATH10k_USE_TXCOMPL_TXRATE | ATH10k_MGT_CHAIN_RSSI_OK);
+		config.rx_decap_mode |= __cpu_to_le32(ATH10k_USE_TXCOMPL_TXRATE | ATH10k_MGT_CHAIN_RSSI_OK
+						      | ATH10k_VDEV_CT_STATS_OK);
 		/* Disable WoW in firmware, could make this module option perhaps? */
 		config.rx_decap_mode |= __cpu_to_le32(ATH10k_DISABLE_WOW);
 		config.roam_offload_max_vdev = 0; /* disable roaming */
@@ -6487,9 +6515,16 @@ static struct sk_buff *ath10k_wmi_10_4_op_gen_init(struct ath10k *ar)
 		/* Enabling this kills performance, for whatever reason. */
 		skid_limit = TARGET_10X_AST_SKID_LIMIT_CT;
 #endif
-		if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+		if (test_bit(ATH10K_FW_FEATURE_CT_STA,
 			     ar->running_fw->fw_file.fw_features) &&
-		    ar->request_nohwcrypt) {
+		    ar->request_ct_sta) {
+			config.rx_decap_mode = __cpu_to_le32(ATH10K_HW_TXRX_RAW |
+							     ATH10k_VDEV_CT_STA_MODE);
+			ath10k_info(ar, "using CT-STA mode\n");
+		}
+		else if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+				  ar->running_fw->fw_file.fw_features) &&
+			 ar->request_nohwcrypt) {
 			/* This will disable rx decryption in hardware, enable raw
 			 * rx mode, and native-wifi tx mode.  Requires 'CT' firmware.
 			 */
@@ -8261,6 +8296,9 @@ ath10k_wmi_fw_vdev_stats_fill(const struct ath10k_fw_stats_vdev *vdev,
 				"%25s [%02d] %u\n",
 				"beacon rssi history", i,
 				vdev->beacon_rssi_history[i]);
+
+	len += scnprintf(buf + len, buf_len - len, "%30s %llu\n",
+			"tsf64", vdev->tsf64);
 
 	len += scnprintf(buf + len, buf_len - len, "\n");
 	*length = len;
