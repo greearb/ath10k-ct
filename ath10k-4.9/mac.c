@@ -214,6 +214,10 @@ int ath10k_modparam_nohwcrypt;
 module_param_named(nohwcrypt, ath10k_modparam_nohwcrypt, int, 0444);
 MODULE_PARM_DESC(nohwcrypt, "Disable hardware rx decrypt feature");
 
+int ath10k_modparam_ct_sta;
+module_param_named(ct_sta, ath10k_modparam_ct_sta, int, 0444);
+MODULE_PARM_DESC(ct_sta, "Use CT-STA mode, a bit like proxy-STA");
+
 int ath10k_modparam_nobeamform_mu;
 module_param_named(nobeamform_mu, ath10k_modparam_nobeamform_mu, int, 0444);
 MODULE_PARM_DESC(nobeamform_mu, "Disable TX/RX MU Beamforming capabilities");
@@ -9098,9 +9102,12 @@ int ath10k_mac_register(struct ath10k *ar)
 			ar->hw->wiphy->interface_modes |= BIT(NL80211_IFTYPE_ADHOC);
 
 			/* CT firmware can do tx-sw-crypt if properly configured */
-			if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
-				     ar->running_fw->fw_file.fw_features) &&
-			    ath10k_modparam_nohwcrypt)
+			if ((!(test_bit(ATH10K_FW_FEATURE_CT_STA,
+					ar->running_fw->fw_file.fw_features) &&
+			       ar->request_ct_sta)) &&
+			    (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+				      ar->running_fw->fw_file.fw_features) &&
+			     ar->request_nohwcrypt))
 				__clear_bit(IEEE80211_HW_SW_CRYPTO_CONTROL, ar->hw->flags);
 		} else {
 			ret = ath10k_copy_comb(ar, ath10k_10_4_if_comb,

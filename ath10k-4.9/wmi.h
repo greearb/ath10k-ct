@@ -2265,6 +2265,8 @@ struct wmi_resource_config {
 	/* Ask CT firmware to send back per-chain management frame RSSI info */
 	#define ATH10k_MGT_CHAIN_RSSI_OK  0x80000
 	#define ATH10k_VDEV_CT_STATS_OK  0x100000
+        #define ATH10k_VDEV_CT_STA_MODE  0x200000 /* Try to use keys a bit like proxy-sta so we can do hw-crypt
+						   * with many stations to same AP. */
 	/* NOTE:  High 8 bits are spoken for, 'features' */
 	__le32 rx_decap_mode;
 

@@ -26,6 +26,7 @@
 enum wmi_tlv_tx_pause_id;
 enum wmi_tlv_tx_pause_action;
 
+extern int ath10k_modparam_ct_sta;
 extern int ath10k_modparam_nohwcrypt;
 extern int ath10k_modparam_nobeamform_mu;
 extern int ath10k_modparam_nobeamform_su;

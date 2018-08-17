@@ -2498,9 +2498,9 @@ static void ath10k_htt_fetch_peer_stats(struct ath10k *ar,
 	rcu_read_lock();
 	spin_lock_bh(&ar->data_lock);
 	peer = ath10k_peer_find_by_id(ar, peer_id);
-	if (!peer) {
-		ath10k_warn(ar, "Invalid peer id %d peer stats buffer\n",
-			    peer_id);
+	if (!peer || !peer->sta) {
+		ath10k_warn(ar, "Invalid peer id %d or peer stats buffer, peer: %p  sta: %p\n",
+			    peer_id, peer, peer ? peer->sta : NULL);
 		goto out;
 	}
 

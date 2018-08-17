@@ -6277,9 +6277,16 @@ static struct sk_buff *ath10k_wmi_10_4_op_gen_init(struct ath10k *ar)
 		/* Enabling this kills performance, for whatever reason. */
 		skid_limit = TARGET_10X_AST_SKID_LIMIT_CT;
 #endif
-		if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+		if (test_bit(ATH10K_FW_FEATURE_CT_STA,
 			     ar->running_fw->fw_file.fw_features) &&
-		    ar->request_nohwcrypt) {
+		    ar->request_ct_sta) {
+			config.rx_decap_mode = __cpu_to_le32(ATH10K_HW_TXRX_RAW |
+							     ATH10k_VDEV_CT_STA_MODE);
+			ath10k_info(ar, "using CT-STA mode\n");
+		}
+		else if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+				  ar->running_fw->fw_file.fw_features) &&
+			 ar->request_nohwcrypt) {
 			/* This will disable rx decryption in hardware, enable raw
 			 * rx mode, and native-wifi tx mode.  Requires 'CT' firmware.
 			 */

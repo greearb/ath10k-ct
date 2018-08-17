@@ -732,6 +732,12 @@ enum ath10k_fw_features {
 	/* Do we support requesting custom stats */
 	ATH10K_FW_FEATURE_CUST_STATS_CT = 46,
 
+	/* Can the firmware handle a retry limit greater than 2? */
+	ATH10K_FW_FEATURE_RETRY_GT2_CT = 47,
+
+	/* Can the firmware handle CT station feature, sort of like proxy-sta */
+	ATH10K_FW_FEATURE_CT_STA = 48,
+
 	/* keep last */
 	ATH10K_FW_FEATURE_COUNT,
 };
@@ -971,6 +977,7 @@ struct ath10k {
 #define ATH10K_FWCFG_MAX_AMSDUS     (1<<13)
 #define ATH10K_FWCFG_NOBEAMFORM_MU  (1<<14)
 #define ATH10K_FWCFG_NOBEAMFORM_SU  (1<<15)
+#define ATH10K_FWCFG_CT_STA         (1<<16)
 
 		u32 flags; /* let us know which fields have been set */
 		char calname[100];
@@ -981,6 +988,7 @@ struct ath10k {
 		u32 stations;
 		u32 peers;
 		u32 nohwcrypt;
+		u32 ct_sta_mode;
 		u32 nobeamform_mu;
 		u32 nobeamform_su;
 		u32 rate_ctrl_objs;
@@ -1088,6 +1096,7 @@ struct ath10k {
 	int max_num_tdls_vdevs;
 	int num_active_peers;
 	int num_tids;
+	bool request_ct_sta;    /* desired setting */
 	bool request_nohwcrypt; /* desired setting */
 	bool request_nobeamform_mu;
 	bool request_nobeamform_su;
