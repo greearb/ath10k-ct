@@ -1596,6 +1596,7 @@ static const struct wmi_peer_flags_map wmi_10x_peer_flags_map = {
 	.spatial_mux = WMI_10X_PEER_SPATIAL_MUX,
 	.vht = WMI_10X_PEER_VHT,
 	.bw80 = WMI_10X_PEER_80MHZ,
+	.pmf = WMI_10X_PEER_PMF, /* CT only */
 	.bw160 = WMI_10X_PEER_160MHZ,
 };
 
@@ -6162,7 +6163,14 @@ static struct sk_buff *ath10k_wmi_10_1_op_gen_init(struct ath10k *ar)
 		     ar->running_fw->fw_file.fw_features)) {
 		u32 features = 0;
 
-		if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+		if (test_bit(ATH10K_FW_FEATURE_CT_STA,
+			     ar->running_fw->fw_file.fw_features) &&
+		    ar->request_ct_sta) {
+			config.rx_decap_mode = __cpu_to_le32(ATH10K_HW_TXRX_NATIVE_WIFI |
+							     ATH10k_VDEV_CT_STA_MODE);
+			ath10k_info(ar, "using CT-STA mode\n");
+		}
+		else if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
 			     ar->running_fw->fw_file.fw_features) &&
 		    ar->request_nohwcrypt) {
 			/* This will disable rx decryption in hardware, enable raw
@@ -6420,6 +6428,7 @@ static struct sk_buff *ath10k_wmi_10_4_op_gen_init(struct ath10k *ar)
 		if (test_bit(ATH10K_FW_FEATURE_CT_STA,
 			     ar->running_fw->fw_file.fw_features) &&
 		    ar->request_ct_sta) {
+			/* TODO-BEN:  Should this be NATIVE_WIFI mode, like we do for 10.1? */
 			config.rx_decap_mode = __cpu_to_le32(ATH10K_HW_TXRX_RAW |
 							     ATH10k_VDEV_CT_STA_MODE);
 			ath10k_info(ar, "using CT-STA mode\n");

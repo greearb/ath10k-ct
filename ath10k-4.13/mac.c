@@ -8030,6 +8030,49 @@ static void ath10k_sta_rc_update(struct ieee80211_hw *hw,
 	ieee80211_queue_work(hw, &arsta->update_wk);
 }
 
+
+static u64 ath10k_get_tsf(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
+{
+	u64 rv = 0;
+
+#ifdef CONFIG_ATH10K_DEBUGFS
+	struct ath10k *ar = hw->priv;
+	struct ath10k_vif *arvif = ath10k_vif_to_arvif(vif);
+	const struct ath10k_fw_stats_vdev *vdev;
+	int ret;
+
+	mutex_lock(&ar->conf_mutex);
+
+	/* Only CT firmware has the feature to get tsf, and even then only
+	 * recent 10.1 fw.  This check will at least keep us from bothering stock
+	 * fw for something it cannot provide.  (Aug 21, 2018). --Ben
+	 */
+	if (!test_bit(ATH10K_FW_FEATURE_CT_RATEMASK,
+		     ar->running_fw->fw_file.fw_features))
+		goto unlock;
+
+	if (ar->state != ATH10K_STATE_ON) {
+		goto unlock;
+	}
+
+	ret = ath10k_debug_fw_stats_request(ar);
+	if (ret)
+		goto unlock;
+
+	list_for_each_entry(vdev, &ar->debug.fw_stats.vdevs, list) {
+		if (vdev->vdev_id == arvif->vdev_id) {
+			rv = vdev->tsf64;
+			break;
+		}
+	}
+
+unlock:
+	mutex_unlock(&ar->conf_mutex);
+#endif
+
+	return rv;
+}
+
 static void ath10k_offset_tsf(struct ieee80211_hw *hw,
 			      struct ieee80211_vif *vif, s64 tsf_offset)
 {
@@ -8538,6 +8581,7 @@ static const struct ieee80211_ops ath10k_ops = {
 	.set_bitrate_mask		= ath10k_mac_op_set_bitrate_mask,
 	.sta_rc_update			= ath10k_sta_rc_update,
 	.offset_tsf			= ath10k_offset_tsf,
+	.get_tsf			= ath10k_get_tsf,
 	.ampdu_action			= ath10k_ampdu_action,
 	.get_et_sset_count		= ath10k_debug_get_et_sset_count,
 	.get_et_stats			= ath10k_debug_get_et_stats,
