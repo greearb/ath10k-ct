@@ -74,6 +74,7 @@ void ath10k_mac_handle_tx_pause_vdev(struct ath10k *ar, u32 vdev_id,
 				     enum wmi_tlv_tx_pause_id pause_id,
 				     enum wmi_tlv_tx_pause_action action);
 
+bool ath10k_mac_bitrate_is_cck(int bitrate);
 u8 ath10k_convert_hw_rate_to_rc(u8 hw_rate, int bitrate);
 u8 ath10k_mac_hw_rate_to_idx(const struct ieee80211_supported_band *sband,
 			     u8 hw_rate, bool cck);

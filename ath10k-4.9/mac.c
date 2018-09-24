@@ -100,7 +100,7 @@ static struct ieee80211_rate ath10k_rates_rev2[] = {
 #define ath10k_g_rates_rev2 (ath10k_rates_rev2 + 0)
 #define ath10k_g_rates_rev2_size (ARRAY_SIZE(ath10k_rates_rev2))
 
-static bool ath10k_mac_bitrate_is_cck(int bitrate)
+bool ath10k_mac_bitrate_is_cck(int bitrate)
 {
 	switch (bitrate) {
 	case 10:
@@ -4815,6 +4815,12 @@ static void ath10k_mac_op_tx(struct ieee80211_hw *hw,
 	is_htt = (txpath == ATH10K_MAC_TX_HTT ||
 		  txpath == ATH10K_MAC_TX_HTT_MGMT);
 	is_mgmt = (txpath == ATH10K_MAC_TX_HTT_MGMT);
+
+	if (ar->eeprom_overrides.tx_debug & 0x1) {
+		ath10k_warn(ar, "op-tx, vif: %pM  type: %d txmode: %d  is_htt: %d  is_mgt: %d\n",
+			    vif->addr, vif->type, txmode, is_htt, is_mgmt);
+	}
+
 
 	if (is_htt) {
 		spin_lock_bh(&ar->htt.tx_lock);

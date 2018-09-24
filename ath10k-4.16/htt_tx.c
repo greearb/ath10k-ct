@@ -1146,6 +1146,74 @@ err:
 	return res;
 }
 
+/* Create a rate-info object that (some) 10.4 CT firmware
+ * can understand.
+ */
+u32 ath10k_convert_hw_rate_to_rate_info(u8 tpc, u8 mcs, u8 nss, u8 pream_type,
+					u8 num_retries, u8 bw, u8 dyn_bw)
+{
+
+	/* Re-use logic from 10.4 firmware */
+	struct __ath10k_rate_info {
+		u32     power              : 8,   /* units of the power field is dbm */
+			mcs                : 4,    /* mcs = 0 ~ 9 */
+			nss                : 2,    /* 0 = 1 nss, 1 = 2 nss, 2 = 3 nss, 3 = 4 nss */
+			pream_type         : 2,    /* 0 = WIFI_RATECODE_PREAM_OFDM,
+						      1 = WIFI_RATECODE_PREAM_CCK,
+						      2 = WIFI_RATECODE_PREAM_HT ,
+						      3 = WIFI_RATECODE_PREAM_VHT */
+			num_retries        : 4,    /* 0 ~ 15 */
+			dyn_bw             : 1,    /* 0 = static bw, 1 = dynamic bw */
+			bw                 : 3,    /* valid only if dyn_bw == 0 (static bw).
+						      (0 = 20 mhz, 1 = 40 mhz, 2 = 80 mhz, 3 = 160 mhz , 4 = 80+80mhz) */
+			valid_power        : 1,   /*  power info field has valid power. */
+			valid_rate         : 1,    /*  mcs,nss,pream_type fields have valid rates. */
+			valid_num_retries  : 1,    /*  num_retries field has valid value */
+			valid_dyn_bw       : 1,    /*  dyn_bw field has valid value */
+			valid_bw           : 1,    /*   bw field has valid value */
+
+			any_valid          : 1,    /* 1 : htt_tx_msdu_desc_t contains valid tx meta data */
+			key_id             : 2;    /* key index 0 to 3 for per packet key rotation */
+	};
+
+	struct __ath10k_rate_info ri;
+	u32 *rvi = (u32*)(&ri);
+	rvi[0] = 0;
+
+	if (tpc != 0xFF) {
+		ri.power = tpc;
+		ri.valid_power = 1;
+		ri.any_valid = 1;
+	}
+
+	if (mcs != 0xFF) {
+		ri.mcs = mcs;
+		ri.nss = nss;
+		ri.pream_type = pream_type;
+		ri.valid_rate = 1;
+		ri.any_valid = 1;
+	}
+
+	if (num_retries != 0xFF) {
+		ri.num_retries = num_retries;
+		ri.valid_num_retries = 1;
+		ri.any_valid = 1;
+	}
+
+	if (dyn_bw != 0xFF) {
+		ri.dyn_bw = dyn_bw;
+		ri.valid_dyn_bw = 1;
+		if (ri.dyn_bw == 0) {
+			ri.bw = bw;
+			ri.valid_bw = 1;
+		}
+		ri.any_valid = 1;
+	}
+
+	/* leave key-id set to zero for now */
+	return rvi[0];
+}
+
 static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 			    enum ath10k_hw_txrx_mode txmode,
 			    struct sk_buff *msdu)
@@ -1185,31 +1253,76 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 		goto err;
 	}
 
+	if ((ar->eeprom_overrides.tx_debug & 0x1) &&
+	    (info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT)) {
+		ath10k_warn(ar, "rate-inject, off-chan: %d txmode: %d\n",
+			    info->flags & IEEE80211_TX_CTL_TX_OFFCHAN, txmode);
+	}
+
 	if (unlikely(info->flags & IEEE80211_TX_CTL_TX_OFFCHAN))
 		freq = ar->scan.roc_freq;
 
-	if (unlikely(info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT)) {
+	else if (unlikely(info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT)) {
 		if (test_bit(ATH10K_FW_FEATURE_HAS_TX_RC_CT,
 			     ar->running_fw->fw_file.fw_features)) {
 			enum nl80211_band band = info->band;
 			const struct ieee80211_supported_band *sband;
-			u8 rix;
-			u32 rate_code;
+			u8 tpc = 0xFF; /* don't need to set this */
+			u8 mcs = 0;
+			u8 nss = 0;
+			u8 pream_type;
+			u8 num_retries;
+			u8 dyn_bw = 0;
+			u8 bw = 0;
+			u16 rix;
 
 			sband = ar->hw->wiphy->bands[band];
 
 			rix = info->control.rates[0].idx;
-			/* TODO-BEN:  Only valid for legacy rates.  Need more work to handl HT & VHT */
-			rate_code = ath10k_convert_hw_rate_to_rc(sband->bitrates[rix].hw_value,
-								 sband->bitrates[rix].bitrate);
-			peer_id = 0x8000; /* this == htt-invalid-peerid in this firmware, gives us
-					   * 7 more bits to play with.
-					   */
-			peer_id |= ((rate_code << 16) & 0xFF0000);
-			peer_id |= (((u32)(info->control.rates[0].count) << 24) & 0xF000000);
-			/* ath10k_err(ar, "msdu: %p  info: %p peer_id: 0x%x  rates.idx: %d  rate_code: 0x%x  hw-value: %d  bitrate: %d count: %d \n",
-			       msdu, info, peer_id, rix, rate_code, sband->bitrates[rix].hw_value,
-			       sband->bitrates[rix].bitrate, (u32)(info->control.rates[0].count));*/
+
+			if (ath10k_mac_bitrate_is_cck(sband->bitrates[rix].bitrate)) {
+				mcs = sband->bitrates[rix].hw_value;
+				pream_type = 1; /* cck */
+			}
+			else {
+				/* So, I am not sure the proper way to determine HT or VHT rates
+				   here, so only support OFDM at this point. --Ben
+				 */
+				mcs = sband->bitrates[rix].hw_value; /* maybe - 4 ??? */
+				pream_type = 0; /* ofdm */
+			}
+			num_retries = info->control.rates[0].count;
+			if (num_retries == 0) {
+				/* Will never hit the air..surely this is not what user wanted! */
+				num_retries = 1;
+			}
+
+			if (ar->dev_id == QCA988X_2_0_DEVICE_ID ||
+			    ar->dev_id == QCA988X_2_0_DEVICE_ID_UBNT ||
+			    ar->dev_id == QCA9887_1_0_DEVICE_ID) {
+				/* wave-1 CT firmware has this API */
+				/* TODO-BEN:  Only valid for legacy rates.  Need more work to handl HT & VHT */
+				u32 rate_code = ath10k_convert_hw_rate_to_rc(sband->bitrates[rix].hw_value,
+									     sband->bitrates[rix].bitrate);
+				peer_id = (0x8000); /* Earlier FW needed this, but this alone would break off-channel tx */
+				peer_id |= ((rate_code << 16) & 0xFF0000);
+				peer_id |= (((u32)(num_retries) << 24) & 0xF000000);
+				peer_id |= (0x20000000); /* Let FW know this is definitely a rate-code */
+
+				if (ar->eeprom_overrides.tx_debug & 0x1)
+					ath10k_warn(ar, "wave-1 vdev-id: %d msdu: %p  info: %p peer_id: 0x%x  rates.idx: %d  rate_code: 0x%x  hw-value: %d  bitrate: %d count: %d \n",
+						    (int)(vdev_id), msdu, info, peer_id, rix, rate_code, sband->bitrates[rix].hw_value,
+						    sband->bitrates[rix].bitrate, (u32)(info->control.rates[0].count));
+			}
+			else {
+				/* wave-2 supports this API */
+				peer_id = ath10k_convert_hw_rate_to_rate_info(tpc, mcs, nss, pream_type, num_retries, bw, dyn_bw);
+
+				if (ar->eeprom_overrides.tx_debug & 0x1)
+					ath10k_warn(ar, "wave-2 vdev-id: %d msdu: %p  info: %p peer_id: 0x%x  rates.idx: %d hw-value: %d  bitrate: %d retry-count: %d\n",
+						    (int)(vdev_id), msdu, info, peer_id, rix, sband->bitrates[rix].hw_value,
+						    sband->bitrates[rix].bitrate, (u32)(info->control.rates[0].count));
+			}
 		}
 	}
 

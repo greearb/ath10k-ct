@@ -618,10 +618,10 @@ void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 				sptr->pcu_bssid_u16 = __le32_to_cpu(regdump->regpair[i].reg_val);
 				break;
 			case PCU_BSSID2_L32:
-				sptr->pcu_bssid_l32 = __le32_to_cpu(regdump->regpair[i].reg_val);
+				sptr->pcu_bssid2_l32 = __le32_to_cpu(regdump->regpair[i].reg_val);
 				break;
 			case PCU_BSSID2_U16:
-				sptr->pcu_bssid_u16 = __le32_to_cpu(regdump->regpair[i].reg_val);
+				sptr->pcu_bssid2_u16 = __le32_to_cpu(regdump->regpair[i].reg_val);
 				break;
 			case PCU_STA_ADDR_U16:
 				sptr->pcu_sta_addr_u16 = __le32_to_cpu(regdump->regpair[i].reg_val);
