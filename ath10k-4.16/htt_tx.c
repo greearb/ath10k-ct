@@ -1162,7 +1162,7 @@ u32 ath10k_convert_hw_rate_to_rate_info(u8 tpc, u8 mcs, u8 nss, u8 pream_type,
 						      1 = WIFI_RATECODE_PREAM_CCK,
 						      2 = WIFI_RATECODE_PREAM_HT ,
 						      3 = WIFI_RATECODE_PREAM_VHT */
-			num_retries        : 4,    /* 0 ~ 15 */
+			num_retries        : 4,    /* 0 ~ 15:  0 means no-ack */
 			dyn_bw             : 1,    /* 0 = static bw, 1 = dynamic bw */
 			bw                 : 3,    /* valid only if dyn_bw == 0 (static bw).
 						      (0 = 20 mhz, 1 = 40 mhz, 2 = 80 mhz, 3 = 160 mhz , 4 = 80+80mhz) */
@@ -1292,10 +1292,6 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 				pream_type = 0; /* ofdm */
 			}
 			num_retries = info->control.rates[0].count;
-			if (num_retries == 0) {
-				/* Will never hit the air..surely this is not what user wanted! */
-				num_retries = 1;
-			}
 
 			if (ar->dev_id == QCA988X_2_0_DEVICE_ID ||
 			    ar->dev_id == QCA988X_2_0_DEVICE_ID_UBNT ||
@@ -1304,6 +1300,12 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 				/* TODO-BEN:  Only valid for legacy rates.  Need more work to handl HT & VHT */
 				u32 rate_code = ath10k_convert_hw_rate_to_rc(sband->bitrates[rix].hw_value,
 									     sband->bitrates[rix].bitrate);
+
+				if (num_retries == 0) {
+					/* Will never hit the air..surely this is not what user wanted! */
+					num_retries = 1;
+				}
+
 				peer_id = (0x8000); /* Earlier FW needed this, but this alone would break off-channel tx */
 				peer_id |= ((rate_code << 16) & 0xFF0000);
 				peer_id |= (((u32)(num_retries) << 24) & 0xF000000);
@@ -1315,6 +1317,10 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 						    sband->bitrates[rix].bitrate, (u32)(info->control.rates[0].count));
 			}
 			else {
+				if (unlikely(info->flags & IEEE80211_TX_CTL_NO_ACK)) {
+					num_retries = 0;
+				}
+
 				/* wave-2 supports this API */
 				peer_id = ath10k_convert_hw_rate_to_rate_info(tpc, mcs, nss, pream_type, num_retries, bw, dyn_bw);
 
@@ -1327,6 +1333,7 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 	}
 
 	if (unlikely(info->flags & IEEE80211_TX_CTL_NO_ACK)) {
+		/* only works on wave-1, but should be properly ignored on wave-2 */
 		flags1 |= HTT_DATA_TX_DESC_FLAGS1_NO_ACK_CT;
 	}
 
@@ -1465,10 +1472,18 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 
 	skb_len = msdu->len;
 	trace_ath10k_htt_tx(ar, msdu_id, msdu->len, vdev_id, tid);
-	ath10k_dbg(ar, ATH10K_DBG_HTT,
-		   "htt tx flags0 %hhu flags1 %hu len %d id %hu frags_paddr %pad, msdu_paddr %pad vdev %hhu tid %hhu freq %hu\n",
-		   flags0, flags1, skb_len, msdu_id, &frags_paddr,
-		   &skb_cb->paddr, vdev_id, tid, freq);
+
+	if (ar->eeprom_overrides.tx_debug & 0x1)
+		ath10k_warn(ar,
+			    "htt tx flags0 %hhu flags1 %hu (noack: %d) len %d id %hu frags_paddr %pad, msdu_paddr %pad vdev %hhu tid %hhu freq %hu\n",
+			    flags0, flags1, (flags1 & HTT_DATA_TX_DESC_FLAGS1_NO_ACK_CT), skb_len, msdu_id, &frags_paddr,
+			    &skb_cb->paddr, vdev_id, tid, freq);
+	else
+		ath10k_dbg(ar, ATH10K_DBG_HTT,
+			   "htt tx flags0 %hhu flags1 %hu len %d id %hu frags_paddr %pad, msdu_paddr %pad vdev %hhu tid %hhu freq %hu\n",
+			   flags0, flags1, skb_len, msdu_id, &frags_paddr,
+			   &skb_cb->paddr, vdev_id, tid, freq);
+
 	ath10k_dbg_dump(ar, ATH10K_DBG_HTT_DUMP, NULL, "htt tx msdu: ",
 			msdu->data, skb_len);
 	trace_ath10k_tx_hdr(ar, msdu->data, msdu->len);

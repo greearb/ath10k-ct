@@ -921,7 +921,7 @@ u32 ath10k_convert_hw_rate_to_rate_info(u8 tpc, u8 mcs, u8 nss, u8 pream_type,
 						      1 = WIFI_RATECODE_PREAM_CCK,
 						      2 = WIFI_RATECODE_PREAM_HT ,
 						      3 = WIFI_RATECODE_PREAM_VHT */
-			num_retries        : 4,    /* 0 ~ 15 */
+			num_retries        : 4,    /* 0 ~ 15:  0 means no-ack */
 			dyn_bw             : 1,    /* 0 = static bw, 1 = dynamic bw */
 			bw                 : 3,    /* valid only if dyn_bw == 0 (static bw).
 						      (0 = 20 mhz, 1 = 40 mhz, 2 = 80 mhz, 3 = 160 mhz , 4 = 80+80mhz) */
@@ -1037,10 +1037,6 @@ int ath10k_htt_tx(struct ath10k_htt *htt, enum ath10k_hw_txrx_mode txmode,
 				pream_type = 0; /* ofdm */
 			}
 			num_retries = info->control.rates[0].count;
-			if (num_retries == 0) {
-				/* Will never hit the air..surely this is not what user wanted! */
-				num_retries = 1;
-			}
 
 			if (ar->dev_id == QCA988X_2_0_DEVICE_ID ||
 			    ar->dev_id == QCA9887_1_0_DEVICE_ID) {
@@ -1048,6 +1044,12 @@ int ath10k_htt_tx(struct ath10k_htt *htt, enum ath10k_hw_txrx_mode txmode,
 				/* TODO-BEN:  Only valid for legacy rates.  Need more work to handl HT & VHT */
 				u32 rate_code = ath10k_convert_hw_rate_to_rc(sband->bitrates[rix].hw_value,
 									     sband->bitrates[rix].bitrate);
+
+				if (num_retries == 0) {
+					/* Will never hit the air..surely this is not what user wanted! */
+					num_retries = 1;
+				}
+
 				peer_id = (0x8000); /* Earlier FW needed this, but this alone would break off-channel tx */
 				peer_id |= ((rate_code << 16) & 0xFF0000);
 				peer_id |= (((u32)(num_retries) << 24) & 0xF000000);
@@ -1059,6 +1061,10 @@ int ath10k_htt_tx(struct ath10k_htt *htt, enum ath10k_hw_txrx_mode txmode,
 						    sband->bitrates[rix].bitrate, (u32)(info->control.rates[0].count));
 			}
 			else {
+				if (unlikely(info->flags & IEEE80211_TX_CTL_NO_ACK)) {
+					num_retries = 0;
+				}
+
 				/* wave-2 supports this API */
 				peer_id = ath10k_convert_hw_rate_to_rate_info(tpc, mcs, nss, pream_type, num_retries, bw, dyn_bw);
 
@@ -1071,6 +1077,7 @@ int ath10k_htt_tx(struct ath10k_htt *htt, enum ath10k_hw_txrx_mode txmode,
 	}
 
 	if (unlikely(info->flags & IEEE80211_TX_CTL_NO_ACK)) {
+		/* only works on wave-1, but should be properly ignored on wave-2 */
 		flags1 |= HTT_DATA_TX_DESC_FLAGS1_NO_ACK_CT;
 	}
 
