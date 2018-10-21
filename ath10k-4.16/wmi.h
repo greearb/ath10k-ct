@@ -2411,6 +2411,7 @@ struct wmi_resource_config {
 	#define ATH10k_VDEV_CT_STATS_OK  0x100000
         #define ATH10k_VDEV_CT_STA_MODE  0x200000 /* Try to use keys a bit like proxy-sta so we can do hw-crypt
 						   * with many stations to same AP. */
+	#define ATH10k_USE_TXCOMPL_TXRATE2 0x400000 /* Ask firmware for more extended tx-status in completion msgs */
 	/* NOTE:  High 8 bits are spoken for, 'features' */
 	__le32 rx_decap_mode;
 

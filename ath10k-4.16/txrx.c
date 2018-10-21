@@ -71,7 +71,13 @@ static void ath10k_set_tx_rate_status(struct ath10k *ar,
 	if (!ch)
 		ch = ar->rx_channel;
 
-	rate->count = 1;
+	if (tx_done->mpdus_failed) {
+		/* Maybe there is a better way to report this tried vs failed stat up the stack? */
+		rate->count = tx_done->mpdus_failed + 1;
+	}
+	else {
+		rate->count = 1;
+	}
 	rate->idx = -1; /* Will set it properly below if rate-code is sane. */
 
 	/* NOTE:  We see reports of '24Mbps 40Mhz' tx rates often reported when we force
@@ -206,6 +212,19 @@ int ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 		 * any other valid rates we might have seen and use that to know if
 		 * firmware is sending tx rates.
 		 */
+
+		/* We have a better check for this in wave-1 firmware now */
+		if ((!tx_done->mpdus_tried) && (!tx_done->tx_rate_code) && (!tx_done->tx_rate_flags)) {
+			if (likely(test_bit(ATH10K_FW_FEATURE_TXRATE2_CT,
+					    ar->running_fw->fw_file.fw_features))) {
+				/* This firmware does not report rates for other than the first frame of
+				 * an ampdu chain, so this check allows us to skip those (which previously
+				 * resulting in a rate of 48Mbps reported.
+				 */
+				goto skip_reporting;
+			}
+		}
+
 		ar->ok_tx_rate_status = true;
 		ath10k_set_tx_rate_status(ar, &info->status.rates[0], tx_done);
 
@@ -225,6 +244,7 @@ int ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 				tx_failed = true;
 		}
 	} else {
+	skip_reporting:
 		info->status.rates[0].idx = -1;
 	}
 

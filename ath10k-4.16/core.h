@@ -791,6 +791,9 @@ enum ath10k_fw_features {
 	/* Can the firmware handle CT station feature, sort of like proxy-sta */
 	ATH10K_FW_FEATURE_CT_STA = 48,
 
+	/* TX-Rate v2 is reported. */
+	ATH10K_FW_FEATURE_TXRATE2_CT = 49,
+
 	/* keep last */
 	ATH10K_FW_FEATURE_COUNT,
 };

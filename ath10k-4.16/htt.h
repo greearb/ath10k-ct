@@ -838,6 +838,15 @@ struct msdu_rx_compl_info_ct {
 	u8 tx_rate_flags; /* what rate flags, See ATH10K_RC_FLAG_SGI, etc */
 };
 
+struct msdu_rx_compl_info_ct2 {
+	__le16 id; /* msdu id */
+	u8 tx_rate_code; /* what rate index the firmware reports transmitting at. */
+	u8 tx_rate_flags; /* what rate flags, See ATH10K_RC_FLAG_SGI, etc */
+	u8 mpdus_tried; /* Frames we tried to transmit */
+	u8 mpdus_failed; /* Frames we failed to get (block)ack'd */
+	u8 unused[2];
+};
+
 struct htt_data_tx_completion_ct {
 	union {
 		u8 flags;
@@ -850,6 +859,20 @@ struct htt_data_tx_completion_ct {
 	u8 num_msdus;
 	u8 rsvd0;
 	struct msdu_rx_compl_info_ct msdus[0]; /* variable length based on %num_msdus */
+} __packed;
+
+struct htt_data_tx_completion_ct2 {
+	union {
+		u8 flags;
+		struct {
+			u8 status:3,
+			   tid:4,
+			   tid_invalid:1;
+		} __packed;
+	} __packed;
+	u8 num_msdus;
+	u8 rsvd0;
+	struct msdu_rx_compl_info_ct2 msdus[0]; /* variable length based on %num_msdus */
 } __packed;
 
 struct htt_tx_compl_ind_base {
@@ -1649,6 +1672,7 @@ struct htt_resp {
 		struct htt_mgmt_tx_completion mgmt_tx_completion;
 		struct htt_data_tx_completion data_tx_completion;
 		struct htt_data_tx_completion_ct data_tx_completion_ct;
+		struct htt_data_tx_completion_ct2 data_tx_completion_ct2;
 		struct htt_rx_indication rx_ind;
 		struct htt_rx_fragment_indication rx_frag_ind;
 		struct htt_rx_peer_map peer_map;
@@ -1693,6 +1717,8 @@ struct htt_tx_done {
 	u8 tx_rate_code; /* CT firmware only, see firmware ar_desc_wifi_ip01.h (search for 0x44) */
 	u8 tx_rate_flags; /* CT firmware only, see flag defs above */
 	s16 ack_rssi;
+	u8 mpdus_tried; /* CT firmware only */
+	u8 mpdus_failed; /* CT firmware only */
 };
 
 enum htt_tx_compl_state {
