@@ -1439,6 +1439,165 @@ static const struct file_operations fops_set_rates = {
 	.llseek = default_llseek,
 };
 
+
+static ssize_t ath10k_read_set_rate_override(struct file *file,
+					     char __user *user_buf,
+					     size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	char* buf2;
+	int size=8000;
+	struct ath10k_vif *arvif;
+	struct ieee80211_vif *vif;
+	struct wireless_dev *wdev;
+	int sofar;
+	int rv;
+	const char buf[] =
+		"This allows specify specif tx rate parameters for all DATA frames on a vdev\n"
+		"Only wave-2 CT firmware has full support.  Wave-1 CT firmware has at least\n"
+		"some support (rix mostly).  Wave-2 does not use rix.\n"
+		"To set a value, you specify the dev-name and key-value pairs:\n"
+		"tpc=10 mcs=x nss=x pream=x retries=x dynbw=0|1 bw=x rix=x enable=0|1\n"
+		"pream: 0=ofdm, 1=cck, 2=HT, 3=VHT\n"
+		"tpc is in 1db increments, 255 means use defaults, bw is 0-3 for 20-160\n"
+		" For example, wlan0:  echo \"wlan0 tpc=255 mcs=0 nss=1 pream=3 retries=1 dynbw=0 bw=0 active=1\" > ...ath10k/set_rate_override\n";
+
+	buf2 = kzalloc(size, GFP_KERNEL);
+	if (buf2 == NULL)
+		return -ENOMEM;
+	strcpy(buf2, buf);
+	sofar = strlen(buf2);
+
+	list_for_each_entry(arvif, &ar->arvifs, list) {
+		vif = arvif->vif;
+		wdev = ieee80211_vif_to_wdev(vif);
+
+		if (!wdev)
+			continue;
+
+		sofar += scnprintf(buf2 + sofar, size - sofar,
+				   "vdev %i(%s) active=%d tpc=%d mcs=%d nss=%d pream=%d retries=%d dynbw=%d bw=%d rix=%d\n",
+				   arvif->vdev_id, wdev->netdev->name,
+				   arvif->txo_active, arvif->txo_tpc, arvif->txo_mcs,
+				   arvif->txo_nss, arvif->txo_pream, arvif->txo_retries, arvif->txo_dynbw,
+				   arvif->txo_bw, arvif->txo_rix);
+		if (sofar >= size)
+			break;
+	}
+
+	rv = simple_read_from_buffer(user_buf, count, ppos, buf2, sofar);
+	kfree(buf2);
+	return rv;
+}
+
+/* Set the rates for specific types of traffic.
+ */
+static ssize_t ath10k_write_set_rate_override(struct file *file,
+					      const char __user *user_buf,
+					      size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	char buf[180];
+	char tmp[20];
+	char* tok;
+	int ret;
+	struct ath10k_vif *arvif;
+	struct ieee80211_vif *vif;
+	unsigned int vdev_id = 0xFFFF;
+	char* bufptr = buf;
+	long rc;
+	char dev_name_match[IFNAMSIZ + 2];
+	struct wireless_dev *wdev;
+
+	memset(buf, 0, sizeof(buf));
+
+	simple_write_to_buffer(buf, sizeof(buf) - 1, ppos, user_buf, count);
+
+	/* make sure that buf is null terminated */
+	buf[sizeof(buf) - 1] = 0;
+
+	/* drop the possible '\n' from the end */
+	if (buf[count - 1] == '\n')
+		buf[count - 1] = 0;
+
+	mutex_lock(&ar->conf_mutex);
+
+	/* Ignore empty lines, 'echo' appends them sometimes at least. */
+	if (buf[0] == 0) {
+		ret = count;
+		goto exit;
+	}
+
+	/* String starts with vdev name, ie 'wlan0'  Find the proper vif that
+	 * matches the name.
+	 */
+	list_for_each_entry(arvif, &ar->arvifs, list) {
+		vif = arvif->vif;
+		wdev = ieee80211_vif_to_wdev(vif);
+
+		if (!wdev)
+			continue;
+		snprintf(dev_name_match, sizeof(dev_name_match) - 1, "%s ", wdev->netdev->name);
+		if (strncmp(dev_name_match, buf, strlen(dev_name_match)) == 0) {
+			vdev_id = arvif->vdev_id;
+			bufptr = buf + strlen(dev_name_match) - 1;
+			break;
+		}
+	}
+
+	if (vdev_id == 0xFFFF) {
+		ath10k_warn(ar, "set-rate-override, unknown netdev name: %s\n", buf);
+		ret = -EINVAL;
+		goto exit;
+	}
+
+#define ATH10K_PARSE_LTOK(a) \
+	if ((tok = strstr(bufptr, " " #a "="))) {			\
+		char* tspace;						\
+		tok += 1; /* move past initial space */			\
+		strncpy(tmp, tok + strlen(#a "="), sizeof(tmp) - 1);	\
+		tmp[sizeof(tmp) - 1] = 0;				\
+		tspace = strstr(tmp, " ");				\
+		if (tspace) { *tspace = 0; }				\
+		if (kstrtol(tmp, 0, &rc) != 0) {			\
+			ath10k_warn(ar, "set-rate-override: " #a "= could not be parsed, tmp: %s\n", tmp); \
+		}							\
+		else {							\
+			arvif->txo_##a = rc;				\
+		}							\
+	}
+
+	ATH10K_PARSE_LTOK(tpc);
+	ATH10K_PARSE_LTOK(mcs);
+	ATH10K_PARSE_LTOK(nss);
+	ATH10K_PARSE_LTOK(pream);
+	ATH10K_PARSE_LTOK(retries);
+	ATH10K_PARSE_LTOK(dynbw);
+	ATH10K_PARSE_LTOK(bw);
+	ATH10K_PARSE_LTOK(rix);
+	ATH10K_PARSE_LTOK(active);
+
+	ath10k_warn(ar, "set-rate-overrides, vdev %i(%s) active=%d tpc=%d mcs=%d nss=%d pream=%d retries=%d dynbw=%d bw=%d rix=%d\n",
+		    arvif->vdev_id, dev_name_match,
+		    arvif->txo_active, arvif->txo_tpc, arvif->txo_mcs,
+		    arvif->txo_nss, arvif->txo_pream, arvif->txo_retries, arvif->txo_dynbw,
+		    arvif->txo_bw, arvif->txo_rix);
+
+	ret = count;
+
+exit:
+	mutex_unlock(&ar->conf_mutex);
+	return ret;
+}
+
+static const struct file_operations fops_set_rate_override = {
+	.read = ath10k_read_set_rate_override,
+	.write = ath10k_write_set_rate_override,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
 static ssize_t ath10k_read_chip_id(struct file *file, char __user *user_buf,
 				   size_t count, loff_t *ppos)
 {
@@ -2813,6 +2972,9 @@ static ssize_t ath10k_read_dfs_stats(struct file *file, char __user *user_buf,
 	ATH10K_DFS_POOL_STAT("Seqs. alloc error", pseq_alloc_error);
 	ATH10K_DFS_POOL_STAT("Seqs. in use", pseq_used);
 
+	len += scnprintf(buf + len, size - len, "Last-DFS-Msg: %s\n",
+			 ar->debug.dfs_last_msg);
+
 exit:
 	if (len > size)
 		len = size;
@@ -3685,6 +3847,9 @@ int ath10k_debug_register(struct ath10k *ar)
 	debugfs_create_file("set_rates", 0600, ar->debug.debugfs_phy,
 			    ar, &fops_set_rates);
 
+	debugfs_create_file("set_rate_override", 0600, ar->debug.debugfs_phy,
+			    ar, &fops_set_rate_override);
+
 	debugfs_create_file("firmware_info", 0400, ar->debug.debugfs_phy, ar,
 			    &fops_fwinfo_services);
 
@@ -3734,7 +3899,7 @@ int ath10k_debug_register(struct ath10k *ar)
 		debugfs_create_file("dfs_simulate_radar", 0200, ar->debug.debugfs_phy,
 				    ar, &fops_simulate_radar);
 
-		debugfs_create_bool("dfs_block_radar_events", 0200,
+		debugfs_create_bool("dfs_block_radar_events", 0644,
 				    ar->debug.debugfs_phy,
 				    &ar->dfs_block_radar_events);
 

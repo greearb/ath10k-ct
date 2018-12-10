@@ -1520,9 +1520,9 @@ static int ath10k_vdev_start_restart(struct ath10k_vif *arvif,
 	}
 
 	ath10k_dbg(ar, ATH10K_DBG_MAC,
-		   "mac vdev %d start center_freq %d phymode %s\n",
+		   "mac vdev %d start center_freq %d phymode %s beacon-int: %d\n",
 		   arg.vdev_id, arg.channel.freq,
-		   ath10k_wmi_phymode_str(arg.channel.mode));
+		   ath10k_wmi_phymode_str(arg.channel.mode), arg.bcn_intval);
 
 	if (restart)
 		ret = ath10k_wmi_vdev_restart(ar, &arg);

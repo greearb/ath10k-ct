@@ -1923,10 +1923,9 @@ int ath10k_wmi_cmd_send(struct ath10k *ar, struct sk_buff *skb, u32 cmd_id)
 		dev_kfree_skb_any(skb);
 
 	if (ret == -EAGAIN) {
-		/* Firmware is not responding after 3 seconds, might as well try to kill it. */
-		ath10k_err(ar, "Cannot communicate with firmware, attempting to fake crash and restart firmware.\n");
-		ath10k_hif_fw_crashed_dump(ar);
-		set_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags);
+		ath10k_warn(ar, "wmi command %d timeout, restarting hardware\n",
+			    cmd_id);
+		queue_work(ar->workqueue, &ar->restart_work);
 	}
 
 	return ret;
@@ -2457,7 +2456,12 @@ static int wmi_process_mgmt_tx_comp(struct ath10k *ar, u32 desc_id,
 	dma_unmap_single(ar->dev, pkt_addr->paddr,
 			 msdu->len, DMA_FROM_DEVICE);
 	info = IEEE80211_SKB_CB(msdu);
-	info->flags |= status;
+
+	if (status)
+		info->flags &= ~IEEE80211_TX_STAT_ACK;
+	else
+		info->flags |= IEEE80211_TX_STAT_ACK;
+
 	ieee80211_tx_status_irqsafe(ar->hw, msdu);
 
 	ret = 0;
@@ -4172,6 +4176,8 @@ static void ath10k_dfs_radar_report(struct ath10k *ar,
 	u8 rssi, width;
 	struct ath10k_radar_found_info *radar_info;
 
+	pe.msg[0] = 0;
+
 	reg0 = __le32_to_cpu(rr->reg0);
 	reg1 = __le32_to_cpu(rr->reg1);
 
@@ -4274,6 +4280,16 @@ static void ath10k_dfs_radar_report(struct ath10k *ar,
 	}
 
 radar_detected:
+
+#ifdef ATH_HAVE_PULSE_EVENT_MSG /* so we can compile out-of-tree easier */
+	if (pe.msg[0]) {
+		strncpy(ar->debug.dfs_last_msg, pe.msg,
+			sizeof(ar->debug.dfs_last_msg));
+		/* ensure null term */
+		ar->debug.dfs_last_msg[sizeof(ar->debug.dfs_last_msg) - 1] = 0;
+	}
+#endif
+
 	ath10k_radar_detected(ar);
 }
 
@@ -7075,6 +7091,11 @@ static struct sk_buff *ath10k_wmi_10_4_op_gen_init(struct ath10k *ar)
 			 */
 			config.qwrap_config = __cpu_to_le32(1 << 16 | TARGET_10_4_QWRAP_CONFIG);
 		}
+
+		if (test_bit(ATH10K_FW_FEATURE_TXRATE2_CT,
+			     ar->running_fw->fw_file.fw_features))
+			config.rx_decap_mode |= __cpu_to_le32(ATH10k_USE_TXCOMPL_TXRATE2);
+
 		/* Disable WoW in firmware, could make this module option perhaps? */
 		config.rx_decap_mode |= __cpu_to_le32(ATH10k_DISABLE_WOW);
 
@@ -7501,10 +7522,10 @@ ath10k_wmi_op_gen_vdev_start(struct ath10k *ar,
 	ath10k_wmi_put_wmi_channel(ar, &cmd->chan, &arg->channel, arg->vdev_id);
 
 	ath10k_dbg(ar, ATH10K_DBG_WMI,
-		   "wmi vdev %s id 0x%x flags: 0x%0X, freq %d, mode %d, ch_flags: 0x%0X, max_power: %d\n",
+		   "wmi vdev %s id 0x%x flags: 0x%0X, freq %d, mode %d, ch_flags: 0x%0X, max_power: %d bcn-intval: %d\n",
 		   cmdname, arg->vdev_id,
 		   flags, arg->channel.freq, arg->channel.mode,
-		   cmd->chan.flags, arg->channel.max_power);
+		   cmd->chan.flags, arg->channel.max_power, arg->bcn_intval);
 
 	return skb;
 }

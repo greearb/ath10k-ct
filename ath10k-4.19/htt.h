@@ -846,7 +846,8 @@ struct htt_data_tx_completion {
 	} __packed;
 	u8 num_msdus;
 	u8 flag_ack_rssi_filled:1, /* For 10.4 firmware */
-	   flag_reserved:5,
+	   flag_reserved:4,
+	   flag_tx_retries_filled:1, /* CT firmware only currently */
 	   flag_tx_rate_filled:1, /* CT firmware only currently */
 	   flag_reserved2:1;
 	__le16 msdus[0]; /* variable length based on %num_msdus */
@@ -1933,7 +1934,8 @@ struct ath10k_htt_tx_ops {
 	int (*htt_send_frag_desc_bank_cfg)(struct ath10k_htt *htt);
 	int (*htt_alloc_frag_desc)(struct ath10k_htt *htt);
 	void (*htt_free_frag_desc)(struct ath10k_htt *htt);
-	int (*htt_tx)(struct ath10k_htt *htt, enum ath10k_hw_txrx_mode txmode,
+	int (*htt_tx)(struct ath10k_htt *htt, struct ieee80211_vif *vif,
+		      enum ath10k_hw_txrx_mode txmode,
 		      struct sk_buff *msdu);
 	int (*htt_alloc_txbuff)(struct ath10k_htt *htt);
 	void (*htt_free_txbuff)(struct ath10k_htt *htt);
@@ -1970,10 +1972,11 @@ static inline void ath10k_htt_free_frag_desc(struct ath10k_htt *htt)
 }
 
 static inline int ath10k_htt_tx(struct ath10k_htt *htt,
+				struct ieee80211_vif *vif,
 				enum ath10k_hw_txrx_mode txmode,
 				struct sk_buff *msdu)
 {
-	return htt->tx_ops->htt_tx(htt, txmode, msdu);
+	return htt->tx_ops->htt_tx(htt, vif, txmode, msdu);
 }
 
 static inline int ath10k_htt_alloc_txbuff(struct ath10k_htt *htt)

@@ -1215,6 +1215,7 @@ u32 ath10k_convert_hw_rate_to_rate_info(u8 tpc, u8 mcs, u8 nss, u8 pream_type,
 }
 
 static int ath10k_htt_tx_32(struct ath10k_htt *htt,
+			    struct ieee80211_vif *vif,
 			    enum ath10k_hw_txrx_mode txmode,
 			    struct sk_buff *msdu)
 {
@@ -1240,6 +1241,7 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 	struct htt_msdu_ext_desc *ext_desc = NULL;
 	struct htt_msdu_ext_desc *ext_desc_t = NULL;
 	u32 peer_id = HTT_INVALID_PEERID;
+	struct ath10k_vif *arvif = (void *)vif->drv_priv;
 
 	if (ar->state != ATH10K_STATE_ON) {
 		static bool done_once = 0;
@@ -1253,18 +1255,22 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 		goto err;
 	}
 
-	if ((ar->eeprom_overrides.tx_debug & 0x1) &&
+	if ((ar->eeprom_overrides.tx_debug & 0x3) &&
 	    (info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT)) {
 		ath10k_warn(ar, "rate-inject, off-chan: %d txmode: %d\n",
 			    info->flags & IEEE80211_TX_CTL_TX_OFFCHAN, txmode);
 	}
 
+	/* ath10k_warn(ar, "info: %p  vif: %p arvif: %p txo-active: %d\n", info, vif, arvif, arvif && arvif->txo_active); */
+
 	if (unlikely(info->flags & IEEE80211_TX_CTL_TX_OFFCHAN))
 		freq = ar->scan.roc_freq;
 
-	else if (unlikely(info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT)) {
+	else if (unlikely((arvif && arvif->txo_active)
+			  || (info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT))) {
 		if (test_bit(ATH10K_FW_FEATURE_HAS_TX_RC_CT,
 			     ar->running_fw->fw_file.fw_features)) {
+			__le16 fc = hdr->frame_control;
 			enum nl80211_band band = info->band;
 			const struct ieee80211_supported_band *sband;
 			u8 tpc = 0xFF; /* don't need to set this */
@@ -1293,6 +1299,30 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 			}
 			num_retries = info->control.rates[0].count;
 
+			/* Only do the overrides for data frames. */
+			/*ath10k_warn(ar, "qos-data: %d data: %d  qos-nullfunc: %d  nullfunc: %d\n",
+				    ieee80211_is_data_qos(fc), ieee80211_is_data(fc),
+				    ieee80211_is_qos_nullfunc(fc), ieee80211_is_nullfunc(fc));*/
+			if ((ieee80211_is_data_qos(fc) || ieee80211_is_data(fc)) &&
+			    (!(ieee80211_is_qos_nullfunc(fc) || ieee80211_is_nullfunc(fc)))) {
+				if (arvif && arvif->txo_active) {
+					tpc = arvif->txo_tpc;
+					mcs = arvif->txo_mcs;
+					nss = arvif->txo_nss;
+					pream_type = arvif->txo_pream;
+					num_retries = arvif->txo_retries;
+					dyn_bw = arvif->txo_dynbw;
+					bw = arvif->txo_bw;
+					rix = arvif->txo_rix;
+					/*ath10k_warn(ar, "gathering txrate info from arvif, tpc: %d mcs: %d nss: %d pream_type: %d num_retries: %d dyn_bw: %d bw: %d rix: %d\n",
+					  tpc, mcs, nss, pream_type, num_retries, dyn_bw, bw, rix);*/
+				}
+			}
+			else {
+				if (!(info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT))
+					goto skip_fixed_rate;
+			}
+
 			if (ar->dev_id == QCA988X_2_0_DEVICE_ID ||
 			    ar->dev_id == QCA988X_2_0_DEVICE_ID_UBNT ||
 			    ar->dev_id == QCA9887_1_0_DEVICE_ID) {
@@ -1311,7 +1341,7 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 				peer_id |= (((u32)(num_retries) << 24) & 0xF000000);
 				peer_id |= (0x20000000); /* Let FW know this is definitely a rate-code */
 
-				if (ar->eeprom_overrides.tx_debug & 0x1)
+				if (ar->eeprom_overrides.tx_debug & 0x3)
 					ath10k_warn(ar, "wave-1 vdev-id: %d msdu: %p  info: %p peer_id: 0x%x  rates.idx: %d  rate_code: 0x%x  hw-value: %d  bitrate: %d count: %d \n",
 						    (int)(vdev_id), msdu, info, peer_id, rix, rate_code, sband->bitrates[rix].hw_value,
 						    sband->bitrates[rix].bitrate, (u32)(info->control.rates[0].count));
@@ -1324,14 +1354,14 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 				/* wave-2 supports this API */
 				peer_id = ath10k_convert_hw_rate_to_rate_info(tpc, mcs, nss, pream_type, num_retries, bw, dyn_bw);
 
-				if (ar->eeprom_overrides.tx_debug & 0x1)
-					ath10k_warn(ar, "wave-2 vdev-id: %d msdu: %p  info: %p peer_id: 0x%x  rates.idx: %d hw-value: %d  bitrate: %d retry-count: %d\n",
-						    (int)(vdev_id), msdu, info, peer_id, rix, sband->bitrates[rix].hw_value,
-						    sband->bitrates[rix].bitrate, (u32)(info->control.rates[0].count));
+				if (ar->eeprom_overrides.tx_debug & 0x3)
+					ath10k_warn(ar, "wave-2 vdev-id: %d msdu: %p peer_id: 0x%x  tpc: %d mcs: %d nss: %d pream_type: %d num_retries: %d bw: %d dyn_bw: %d\n",
+						    (int)(vdev_id), msdu, peer_id, tpc, mcs, nss, pream_type, num_retries, bw, dyn_bw);
 			}
 		}
 	}
 
+skip_fixed_rate:
 	if (unlikely(info->flags & IEEE80211_TX_CTL_NO_ACK)) {
 		/* only works on wave-1, but should be properly ignored on wave-2 */
 		flags1 |= HTT_DATA_TX_DESC_FLAGS1_NO_ACK_CT;
@@ -1473,7 +1503,7 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 	skb_len = msdu->len;
 	trace_ath10k_htt_tx(ar, msdu_id, msdu->len, vdev_id, tid);
 
-	if (ar->eeprom_overrides.tx_debug & 0x1)
+	if (ar->eeprom_overrides.tx_debug & 0x3)
 		ath10k_warn(ar,
 			    "htt tx flags0 %hhu flags1 %hu (noack: %d) len %d id %hu frags_paddr %pad, msdu_paddr %pad vdev %hhu tid %hhu freq %hu\n",
 			    flags0, flags1, (flags1 & HTT_DATA_TX_DESC_FLAGS1_NO_ACK_CT), skb_len, msdu_id, &frags_paddr,
@@ -1525,6 +1555,7 @@ err:
 }
 
 static int ath10k_htt_tx_64(struct ath10k_htt *htt,
+			    struct ieee80211_vif *vif,
 			    enum ath10k_hw_txrx_mode txmode,
 			    struct sk_buff *msdu)
 {

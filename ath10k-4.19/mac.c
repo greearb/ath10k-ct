@@ -1570,9 +1570,9 @@ static int ath10k_vdev_start_restart(struct ath10k_vif *arvif,
 	}
 
 	ath10k_dbg(ar, ATH10K_DBG_MAC,
-		   "mac vdev %d start center_freq %d phymode %s\n",
+		   "mac vdev %d start center_freq %d phymode %s beacon-int: %d\n",
 		   arg.vdev_id, arg.channel.freq,
-		   ath10k_wmi_phymode_str(arg.channel.mode));
+		   ath10k_wmi_phymode_str(arg.channel.mode), arg.bcn_intval);
 
 	if (restart)
 		ret = ath10k_wmi_vdev_restart(ar, &arg);
@@ -4179,7 +4179,8 @@ bool ath10k_mac_tx_frm_has_freq(struct ath10k *ar)
 		ar->running_fw->fw_file.htt_op_version == ATH10K_FW_HTT_OP_VERSION_TLV);
 }
 
-static int ath10k_mac_tx_wmi_mgmt(struct ath10k *ar, struct sk_buff *skb)
+static int ath10k_mac_tx_wmi_mgmt(struct ath10k *ar,
+				  struct sk_buff *skb)
 {
 	struct sk_buff_head *q = &ar->wmi_mgmt_tx_queue;
 	int ret = 0;
@@ -4227,6 +4228,7 @@ ath10k_mac_tx_h_get_txpath(struct ath10k *ar,
 }
 
 static int ath10k_mac_tx_submit(struct ath10k *ar,
+				struct ieee80211_vif *vif,
 				enum ath10k_hw_txrx_mode txmode,
 				enum ath10k_mac_tx_path txpath,
 				struct sk_buff *skb)
@@ -4236,7 +4238,7 @@ static int ath10k_mac_tx_submit(struct ath10k *ar,
 
 	switch (txpath) {
 	case ATH10K_MAC_TX_HTT:
-		ret = ath10k_htt_tx(htt, txmode, skb);
+		ret = ath10k_htt_tx(htt, vif, txmode, skb);
 		break;
 	case ATH10K_MAC_TX_HTT_MGMT:
 		ret = ath10k_htt_mgmt_tx(htt, skb);
@@ -4311,7 +4313,7 @@ static int ath10k_mac_tx(struct ath10k *ar,
 		}
 	}
 
-	ret = ath10k_mac_tx_submit(ar, txmode, txpath, skb);
+	ret = ath10k_mac_tx_submit(ar, vif, txmode, txpath, skb);
 	if (ret) {
 		ath10k_warn(ar, "failed to submit frame: %d\n", ret);
 		return ret;

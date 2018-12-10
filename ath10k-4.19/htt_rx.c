@@ -1949,10 +1949,11 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 	}
 
 	ath10k_dbg(ar, ATH10K_DBG_HTT,
-		   "htt tx completion num_msdus %d status: %d  discard: %d  no-ack: %d\n",
+		   "htt tx completion num_msdus %d status: %d  discard: %d  no-ack: %d wmi-op-ver: %d\n",
 		   resp->data_tx_completion.num_msdus, status,
 		   tx_done.status == HTT_TX_COMPL_STATE_DISCARD,
-		   tx_done.status == HTT_TX_COMPL_STATE_NOACK);
+		   tx_done.status == HTT_TX_COMPL_STATE_NOACK,
+		   ar->running_fw->fw_file.wmi_op_version);
 
 	if (test_bit(ATH10K_FW_FEATURE_TXRATE_CT,
 		     ar->running_fw->fw_file.fw_features) &&
@@ -1979,7 +1980,7 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 			 * of the ath10k-ct wave-1 tx-rate logic.
 			 */
 
-			/*ath10k_warn(ar,
+			/* ath10k_warn(ar,
 				    "htt tx completion, msdu_id: %d  tx-rate-code: 0x%x tx-rate-flags: 0x%x  tried: %d  failed: %d\n",
 				    tx_done.msdu_id,
 				    tx_done.tx_rate_code,
@@ -2007,6 +2008,7 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 		int storage_idx = (resp->data_tx_completion_ct.num_msdus + 1) & ~1;
 		__le16 ack_rssi;
 		__le16 rate_info;
+		__le16 retries_info;
 		/* 10.4 firmware may report the ack rssi.  If so, it is
 		 * a series of uint16 appended on the end of the report.
 		 * And, 10.4 CT firmware may also report tx-rate, which
@@ -2025,8 +2027,17 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 			goto do_generic;
 		}
 
+		if (resp->data_tx_completion.flag_tx_retries_filled &&
+		    WARN_ON_ONCE(skb->len < ((storage_idx * 4) + sizeof(struct htt_data_tx_completion)))) {
+			ath10k_err(ar, "Invalid length for tx-retries report, skb->len: %d  storage_idx: %d msdu: %d\n",
+				   skb->len, storage_idx, resp->data_tx_completion_ct.num_msdus);
+			goto do_generic;
+		}
+
 		tx_done.tx_rate_code = 0;
 		tx_done.tx_rate_flags = 0;
+		tx_done.mpdus_tried = 0;
+		tx_done.mpdus_failed = 0;
 		for (i = 0; i < resp->data_tx_completion_ct.num_msdus; i++) {
 			msdu_id = resp->data_tx_completion.msdus[i];
 			tx_done.msdu_id = __le16_to_cpu(msdu_id);
@@ -2037,7 +2048,28 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 				rate_info = __le16_to_cpu(rate_info);
 				tx_done.tx_rate_code = rate_info >> 8;
 				tx_done.tx_rate_flags = rate_info & 0xFF;
+				if (resp->data_tx_completion.flag_tx_retries_filled) {
+					/* NOTE:  It seems that if 'probe' frames in the firmware
+					 * fail, then they will be retried at a lower rate, and because
+					 * the tx rate is different, it is not counted as 'mpdus_failed'
+					 * when finally reporting the tx status here.  So, this will
+					 * undercount, at least when using rate-ctrl.  I think that using
+					 * a single fixed rate might not see this issue, but that needs
+					 * testing. --Ben
+					 */
+					retries_info = resp->data_tx_completion.msdus[storage_idx * 3 + i];
+					retries_info = __le16_to_cpu(retries_info);
+					tx_done.mpdus_tried = retries_info & 0xFF;
+					tx_done.mpdus_failed = retries_info >> 8;
+				}
 			}
+			/* ath10k_warn(ar,
+				    "htt tx completion-w2, msdu_id: %d  tx-rate-code: 0x%x tx-rate-flags: 0x%x  tried: %d  failed: %d\n",
+				    tx_done.msdu_id,
+				    tx_done.tx_rate_code,
+				    tx_done.tx_rate_flags,
+				    tx_done.mpdus_tried,
+				    tx_done.mpdus_failed);*/
 			ath10k_txrx_tx_unref(htt, &tx_done);
 		}
 	} else {
