@@ -4176,7 +4176,9 @@ static void ath10k_dfs_radar_report(struct ath10k *ar,
 	u8 rssi, width;
 	struct ath10k_radar_found_info *radar_info;
 
+#ifdef ATH_HAVE_PULSE_EVENT_MSG
 	pe.msg[0] = 0;
+#endif
 
 	reg0 = __le32_to_cpu(rr->reg0);
 	reg1 = __le32_to_cpu(rr->reg1);
