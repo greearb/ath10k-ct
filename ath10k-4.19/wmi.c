@@ -370,7 +370,6 @@ static struct wmi_cmd_map wmi_10x_cmd_map = {
 	.set_cca_params_cmdid = WMI_CMD_UNSUPPORTED,
 	.pdev_bss_chan_info_request_cmdid =
 		WMI_10_2_PDEV_BSS_CHAN_INFO_REQUEST_CMDID,
-	.pdev_bss_chan_info_request_cmdid = WMI_CMD_UNSUPPORTED,
 	.pdev_get_tpc_table_cmdid = WMI_CMD_UNSUPPORTED,
 	.radar_found_cmdid = WMI_CMD_UNSUPPORTED,
 };
