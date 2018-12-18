@@ -2081,16 +2081,21 @@ static int ath10k_core_fetch_firmware_files(struct ath10k *ar)
 	ath10k_fetch_cal_file(ar);
 
 	/* Check for user-specified firmware name. */
-	if (ar->fwcfg.fwname[0] && (ar->fwcfg.flags & ATH10K_FWCFG_FWVER)) {
-		ar->fw_api = ar->fwcfg.fwver;
-		ath10k_dbg(ar, ATH10K_DBG_BOOT,
-			   "trying user-specified fw %s api %d\n",
-			   ar->fwcfg.fwname, ar->fw_api);
+	if (ar->fwcfg.fwname[0]) {
+		if (ar->fwcfg.flags & ATH10K_FWCFG_FWVER) {
+			ar->fw_api = ar->fwcfg.fwver;
+			ath10k_dbg(ar, ATH10K_DBG_BOOT,
+				   "trying user-specified fw %s api %d\n",
+				   ar->fwcfg.fwname, ar->fw_api);
 
-		ret = ath10k_core_fetch_firmware_api_n(ar, ar->fwcfg.fwname,
-				&ar->normal_mode_fw.fw_file);
-		if (ret == 0)
-			goto success;
+			ret = ath10k_core_fetch_firmware_api_n(ar, ar->fwcfg.fwname,
+							       &ar->normal_mode_fw.fw_file);
+			if (ret == 0)
+				goto success;
+		}
+		else {
+			ath10k_warn(ar, "fwcfg fwname specified but no fwver specified, ignoring fwname.\n");
+		}
 	}
 
 	/* Check for CT firmware version 5 API. */

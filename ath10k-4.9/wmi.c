@@ -1756,8 +1756,8 @@ int ath10k_wmi_cmd_send_nowait(struct ath10k *ar, struct sk_buff *skb,
 	cmd_hdr->cmd_id = __cpu_to_le32(cmd);
 
 	memset(skb_cb, 0, sizeof(*skb_cb));
+	trace_ath10k_wmi_cmd(ar, cmd_id, skb->data, skb->len);
 	ret = ath10k_htc_send(&ar->htc, ar->wmi.eid, skb);
-	trace_ath10k_wmi_cmd(ar, cmd_id, skb->data, skb->len, ret);
 
 	if (ret)
 		goto err_pull;
@@ -1883,10 +1883,10 @@ int ath10k_wmi_cmd_send(struct ath10k *ar, struct sk_buff *skb, u32 cmd_id)
 		dev_kfree_skb_any(skb);
 
 	if (ret == -EAGAIN) {
-		/* Firmware is not responding after 3 seconds, might as well try to kill it. */
-		ath10k_err(ar, "Cannot communicate with firmware, attempting to fake crash and restart firmware.\n");
-		ath10k_hif_fw_crashed_dump(ar);
+		ath10k_warn(ar, "wmi command %d timeout, restarting hardware\n",
+			    cmd_id);
 		set_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags);
+		queue_work(ar->workqueue, &ar->restart_work);
 	}
 
 	return ret;
@@ -3920,6 +3920,11 @@ static void ath10k_dfs_radar_report(struct ath10k *ar,
 
 	spin_lock_bh(&ar->data_lock);
 	ch = ar->rx_channel;
+
+	/* fetch target operating channel during channel change */
+	if (!ch)
+		ch = ar->tgt_oper_chan;
+
 	spin_unlock_bh(&ar->data_lock);
 
 	if (!ch) {

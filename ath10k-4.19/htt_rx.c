@@ -2446,6 +2446,13 @@ static void ath10k_htt_rx_tx_fetch_ind(struct ath10k *ar, struct sk_buff *skb)
 
 	rcu_read_lock();
 
+	/* Wave-2 firmware that I saw uses a u8 to store the num-records in the handler
+	 * code, so if driver sends > 256, driver and firmware will be out of sync.  I am
+	 * fixing this in my firmware, but WARN here so we can know if other firmware would
+	 * ever see this problem.
+	 */
+	WARN_ON_ONCE(num_records > 256);
+
 	for (i = 0; i < num_records; i++) {
 		record = &resp->tx_fetch_ind.records[i];
 		peer_id = MS(le16_to_cpu(record->info),
@@ -2696,7 +2703,14 @@ ath10k_update_per_peer_tx_stats(struct ath10k *ar,
 	sgi = ATH10K_HW_GI(peer_stats->flags);
 
 	if (txrate.flags == WMI_RATE_PREAMBLE_VHT && txrate.mcs > 9) {
-		ath10k_warn(ar, "Invalid VHT mcs %hhd peer stats",  txrate.mcs);
+		static bool done_once = 0;
+		if (!done_once) {
+			ath10k_warn(ar, "Invalid VHT mcs %hhd peer stats",  txrate.mcs);
+			done_once = true;
+		}
+		else {
+			ath10k_dbg(ar, ATH10K_DBG_HTT, "Invalid VHT mcs %hhd peer stats",  txrate.mcs);
+		}
 		return;
 	}
 
@@ -2766,8 +2780,17 @@ static void ath10k_htt_fetch_peer_stats(struct ath10k *ar,
 	spin_lock_bh(&ar->data_lock);
 	peer = ath10k_peer_find_by_id(ar, peer_id);
 	if (!peer || !peer->sta) {
-		ath10k_warn(ar, "Invalid peer id %d or peer stats buffer, peer: %p  sta: %p\n",
-			    peer_id, peer, peer ? peer->sta : NULL);
+		static bool done_once = false;
+		if (!done_once) {
+			ath10k_warn(ar, "Invalid peer id %d or peer stats buffer, peer: %p  sta: %p\n",
+				    peer_id, peer, peer ? peer->sta : NULL);
+			done_once = true;
+		}
+		else {
+			ath10k_dbg(ar, ATH10K_DBG_HTT,
+				   "Invalid peer id %d or peer stats buffer, peer: %p  sta: %p\n",
+				   peer_id, peer, peer ? peer->sta : NULL);
+		}
 		goto out;
 	}
 

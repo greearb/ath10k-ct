@@ -761,7 +761,7 @@ static int ath10k_core_get_board_id_from_otp(struct ath10k *ar)
 {
 	u32 result, address;
 	u8 board_id, chip_id;
-	int ret;
+	int ret, bmi_board_id_param;
 
 	address = ar->hw_params.patch_load_addr;
 
@@ -785,8 +785,13 @@ static int ath10k_core_get_board_id_from_otp(struct ath10k *ar)
 		return ret;
 	}
 
-	ret = ath10k_bmi_execute(ar, address, BMI_PARAM_GET_EEPROM_BOARD_ID,
-				 &result);
+	if (ar->cal_mode == ATH10K_PRE_CAL_MODE_DT ||
+	    ar->cal_mode == ATH10K_PRE_CAL_MODE_FILE)
+		bmi_board_id_param = BMI_PARAM_GET_FLASH_BOARD_ID;
+	else
+		bmi_board_id_param = BMI_PARAM_GET_EEPROM_BOARD_ID;
+
+	ret = ath10k_bmi_execute(ar, address, bmi_board_id_param, &result);
 	if (ret) {
 		ath10k_err(ar, "could not execute otp for board id check: %d\n",
 			   ret);
@@ -800,8 +805,12 @@ static int ath10k_core_get_board_id_from_otp(struct ath10k *ar)
 		   "boot get otp board id result 0x%08x board_id %d chip_id %d\n",
 		   result, board_id, chip_id);
 
-	if ((result & ATH10K_BMI_BOARD_ID_STATUS_MASK) != 0)
+	if ((result & ATH10K_BMI_BOARD_ID_STATUS_MASK) != 0 ||
+	    (board_id == 0)) {
+		ath10k_dbg(ar, ATH10K_DBG_BOOT,
+			   "board id does not exist in otp, ignore it\n");
 		return -EOPNOTSUPP;
+	}
 
 	ar->id.bmi_ids_valid = true;
 	ar->id.bmi_board_id = board_id;
@@ -844,6 +853,11 @@ static int ath10k_download_and_run_otp(struct ath10k *ar)
 		ath10k_err(ar, "could not write otp (%d)\n", ret);
 		return ret;
 	}
+
+	/* As of now pre-cal is valid for 10_4 variants */
+	if (ar->cal_mode == ATH10K_PRE_CAL_MODE_DT ||
+	    ar->cal_mode == ATH10K_PRE_CAL_MODE_FILE)
+		bmi_otp_exe_param = BMI_PARAM_FLASH_SECTION_ALL;
 
 	ret = ath10k_bmi_execute(ar, address, bmi_otp_exe_param, &result);
 	if (ret) {
