@@ -2405,7 +2405,8 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	      (ar->dev_id == QCA9984_1_0_DEVICE_ID))) {
 #ifdef STANDALONE_CT
 		/* Assume OpenWRT/LEDE users don't need this anyway, so don't warn loudly. */
-		ath10k_dbg(ar, "rate-override:  Skipping un-supported device-id, hw-nss: %d dev-id: 0x%x\n",
+		ath10k_dbg(ar, ATH10K_DBG_MAC,
+			   "rate-override:  Skipping un-supported device-id, hw-nss: %d dev-id: 0x%x\n",
 			   hw_nss, ar->dev_id);
 #else
 		ath10k_warn(ar, "rate-override:  Skipping un-supported device-id, hw-nss: %d dev-id: 0x%x\n",
