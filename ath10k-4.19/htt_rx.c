@@ -2716,8 +2716,17 @@ ath10k_update_per_peer_tx_stats(struct ath10k *ar,
 
 	if (txrate.flags == WMI_RATE_PREAMBLE_HT &&
 	    (txrate.mcs > 7 || txrate.nss < 1)) {
-		ath10k_warn(ar, "Invalid HT mcs %hhd nss %hhd peer stats",
-			    txrate.mcs, txrate.nss);
+		static bool done_once = 0;
+		if (!done_once) {
+			ath10k_warn(ar, "Invalid HT mcs %hhd nss %hhd peer stats",
+				    txrate.mcs, txrate.nss);
+			done_once = true;
+		}
+		else {
+			ath10k_dbg(ar, ATH10K_DBG_HTT,
+				   "Invalid HT mcs %hhd nss %hhd peer stats",
+				   txrate.mcs, txrate.nss);
+		}
 		return;
 	}
 
@@ -2728,8 +2737,17 @@ ath10k_update_per_peer_tx_stats(struct ath10k *ar,
 		rate = ATH10K_HW_LEGACY_RATE(peer_stats->ratecode);
 
 		if (!is_valid_legacy_rate(rate)) {
-			ath10k_warn(ar, "Invalid legacy rate %hhd peer stats",
-				    rate);
+			static bool done_once = 0;
+			if (!done_once) {
+				ath10k_warn(ar, "Invalid legacy rate %hhd peer stats",
+					    rate);
+				done_once = true;
+			}
+			else {
+				ath10k_dbg(ar, ATH10K_DBG_HTT,
+					   "Invalid legacy rate %hhd peer stats",
+					   rate);
+			}
 			return;
 		}
 
