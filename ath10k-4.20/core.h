@@ -95,14 +95,6 @@
 
 struct ath10k;
 
-enum ath10k_bus {
-	ATH10K_BUS_PCI,
-	ATH10K_BUS_AHB,
-	ATH10K_BUS_SDIO,
-	ATH10K_BUS_USB,
-	ATH10K_BUS_SNOC,
-};
-
 static inline const char *ath10k_bus_str(enum ath10k_bus bus)
 {
 	switch (bus) {
@@ -505,6 +497,36 @@ struct ath10k_sta_tid_stats {
 	unsigned long int rx_pkt_amsdu[ATH10K_AMSDU_SUBFRM_NUM_MAX];
 };
 
+enum ath10k_counter_type {
+	ATH10K_COUNTER_TYPE_BYTES,
+	ATH10K_COUNTER_TYPE_PKTS,
+	ATH10K_COUNTER_TYPE_MAX,
+};
+
+enum ath10k_stats_type {
+	ATH10K_STATS_TYPE_SUCC,
+	ATH10K_STATS_TYPE_FAIL,
+	ATH10K_STATS_TYPE_RETRY,
+	ATH10K_STATS_TYPE_AMPDU,
+	ATH10K_STATS_TYPE_MAX,
+};
+
+struct ath10k_htt_data_stats {
+	u64 legacy[ATH10K_COUNTER_TYPE_MAX][ATH10K_LEGACY_NUM];
+	u64 ht[ATH10K_COUNTER_TYPE_MAX][ATH10K_HT_MCS_NUM];
+	u64 vht[ATH10K_COUNTER_TYPE_MAX][ATH10K_VHT_MCS_NUM];
+	u64 bw[ATH10K_COUNTER_TYPE_MAX][ATH10K_BW_NUM];
+	u64 nss[ATH10K_COUNTER_TYPE_MAX][ATH10K_NSS_NUM];
+	u64 gi[ATH10K_COUNTER_TYPE_MAX][ATH10K_GI_NUM];
+};
+
+struct ath10k_htt_tx_stats {
+	struct ath10k_htt_data_stats stats[ATH10K_STATS_TYPE_MAX];
+	u64 tx_duration;
+	u64 ba_fails;
+	u64 ack_fails;
+};
+
 struct ath10k_sta {
 	struct ath10k_vif *arvif;
 
@@ -518,6 +540,7 @@ struct ath10k_sta {
 
 	struct work_struct update_wk;
 	u64 rx_duration;
+	struct ath10k_htt_tx_stats *tx_stats;
 
 #ifdef CONFIG_MAC80211_DEBUGFS
 	/* protected by conf_mutex */
@@ -526,6 +549,8 @@ struct ath10k_sta {
 	/* Protected with ar->data_lock */
 	struct ath10k_sta_tid_stats tid_stats[IEEE80211_NUM_TIDS + 1];
 #endif
+	/* Protected with ar->data_lock */
+	u32 peer_ps_state;
 };
 
 #define ATH10K_VDEV_SETUP_TIMEOUT_HZ (5 * HZ)
@@ -699,6 +724,7 @@ struct ath10k_debug {
 	u32 reg_addr;
 	u32 nf_cal_period;
 	void *cal_data;
+	u32 enable_extd_tx_stats;
 	u32 nop_id;
 
 	struct ath10k_dbglog_entry_storage dbglog_entry_data;
@@ -1055,6 +1081,9 @@ struct ath10k_fw_components {
 	const struct firmware *board;
 	const void *board_data;
 	size_t board_len;
+	const struct firmware *ext_board;
+	const void *ext_board_data;
+	size_t ext_board_len;
 
 	struct ath10k_fw_file fw_file;
 };
@@ -1074,6 +1103,16 @@ struct ath10k_per_peer_tx_stats {
 	u32	reserved2;
 };
 
+enum ath10k_dev_type {
+	ATH10K_DEV_TYPE_LL,
+	ATH10K_DEV_TYPE_HL,
+};
+
+struct ath10k_bus_params {
+	u32 chip_id;
+	enum ath10k_dev_type dev_type;
+};
+
 struct ath10k {
 	struct ath_common ath_common;
 	struct ieee80211_hw *hw;
@@ -1088,6 +1127,7 @@ struct ath10k {
 	bool ok_tx_rate_status; /* Firmware is sending tx-rate status?  (CT only) */
 	bool fw_powerup_failed; /* If true, might take reboot to recover. */
 	u32 chip_id;
+	enum ath10k_dev_type dev_type;
 	u32 target_version;
 	u8 fw_version_major;
 	bool use_swcrypt; /* Firmware (and driver) supports rx-sw-crypt? */
@@ -1107,7 +1147,10 @@ struct ath10k {
 	u32 low_5ghz_chan;
 	u32 high_5ghz_chan;
 	bool ani_enabled;
+	/* protected by conf_mutex */
+	u8 ps_state_enable;
 
+	bool nlo_enabled;
 	bool p2p;
 	bool ct_all_pkts_htt; /* CT firmware only: native-wifi for all pkts */
 
@@ -1164,6 +1207,7 @@ struct ath10k {
 		char calname[100];
 		char fwname[100];
 		char bname[100]; /* board file name */
+		char bname_ext[100]; /* extended board file name */
 		u32 fwver;
 		u32 vdevs;
 		u32 stations;
@@ -1190,8 +1234,12 @@ struct ath10k {
 		u32 subsystem_device;
 
 		bool bmi_ids_valid;
+		bool qmi_ids_valid;
+		u32 qmi_board_id;
 		u8 bmi_board_id;
+		u8 bmi_eboard_id;
 		u8 bmi_chip_id;
+		bool ext_bid_supported;
 
 		char bdf_ext[ATH10K_SMBIOS_BDF_EXT_STR_LENGTH];
 	} id;
@@ -1476,8 +1524,11 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		      const struct ath10k_fw_components *fw_components);
 int ath10k_wait_for_suspend(struct ath10k *ar, u32 suspend_opt);
 void ath10k_core_stop(struct ath10k *ar);
-int ath10k_core_register(struct ath10k *ar, u32 chip_id);
+int ath10k_core_register(struct ath10k *ar,
+			 const struct ath10k_bus_params *bus_params);
 void ath10k_core_unregister(struct ath10k *ar);
+int ath10k_core_fetch_board_file(struct ath10k *ar, int bd_ie_type);
+void ath10k_core_free_board_files(struct ath10k *ar);
 void ath10k_core_free_limits(struct ath10k* ar);
 
 #endif /* _CORE_H_ */
