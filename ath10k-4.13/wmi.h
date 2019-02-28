@@ -1382,6 +1382,7 @@ enum wmi_10x_event_id {
 
 	WMI_10_1_PDEV_TEMPERATURE_EVENTID = 36898, /* Newer CT firmware */
 	WMI_10_1_PDEV_BSS_CHAN_INFO_EVENTID = 36900, /* Newer CT firmware */
+	WMI_10_1_BEACON_TX_EVENTID = WMI_10X_END_EVENTID - 4, /* CT FW, beacon tx completed */
 	WMI_10X_PDEV_UTF_EVENTID = WMI_10X_END_EVENTID - 1,
 };
 
@@ -1762,6 +1763,9 @@ enum wmi_10_4_event_id {
 	WMI_10_4_PDEV_NFCAL_POWER_ALL_CHANNELS_EVENTID,
 	WMI_10_4_PDEV_BSS_CHAN_INFO_EVENTID,
 	WMI_10_4_MU_REPORT_EVENTID,
+
+
+	WMI_10_4_BEACON_TX_EVENTID = WMI_10_4_END_EVENTID - 4, /* CT FW, beacon tx completed */
 	WMI_10_4_TXBF_CV_MESG_EVENTID = WMI_10_4_END_EVENTID - 3, /* CT Specific event ID */
 	WMI_10_4_CSI_MESG_EVENTID = WMI_10_4_END_EVENTID - 2, /* CT Specific event ID */
 	WMI_10_4_PDEV_UTF_EVENTID = WMI_10_4_END_EVENTID - 1,
@@ -5863,6 +5867,13 @@ struct wmi_bcn_info {
 	struct wmi_tim_info tim_info;
 	struct wmi_p2p_noa_info p2p_noa_info;
 } __packed;
+
+/* CT FW only */
+struct wmi_beacon_tx_event {
+	__le32 vdev_id;
+	__le32 tx_status;
+	__le32 future[4];
+};
 
 struct wmi_host_swba_event {
 	__le32 vdev_map;

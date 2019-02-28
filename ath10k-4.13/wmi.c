@@ -1804,8 +1804,7 @@ static void ath10k_wmi_tx_beacon_nowait(struct ath10k_vif *arvif)
 
 		dtim_zero = !!(cb->flags & ATH10K_SKB_F_DTIM_ZERO);
 		deliver_cab = !!(cb->flags & ATH10K_SKB_F_DELIVER_CAB);
-		ret = ath10k_wmi_beacon_send_ref_nowait(arvif->ar,
-							arvif->vdev_id,
+		ret = ath10k_wmi_beacon_send_ref_nowait(arvif,
 							bcn->data, bcn->len,
 							cb->paddr,
 							dtim_zero,
@@ -5281,6 +5280,38 @@ static int ath10k_wmi_event_temperature(struct ath10k *ar, struct sk_buff *skb)
 	return 0;
 }
 
+static void ath10k_wmi_event_beacon_tx(struct ath10k *ar, struct sk_buff *skb)
+{
+	struct ath10k_vif *arvif;
+	const struct wmi_beacon_tx_event *ev;
+	u32 vdev_id;
+
+	spin_lock_bh(&ar->data_lock);
+
+	ev = (struct wmi_beacon_tx_event *)skb->data;
+
+	if (WARN_ON_ONCE(skb->len < sizeof(*ev)))
+		goto exit;
+
+	vdev_id = __le32_to_cpu(ev->vdev_id);
+
+	/*ath10k_dbg(ar, ATH10K_DBG_WMI,
+		   "wmi event beacon-tx-complete, vdev-id: %u  completion-status: 0x%x\n",
+		   vdev_id, __le32_to_cpu(ev->tx_status));*/
+
+	arvif = ath10k_get_arvif(ar, vdev_id);
+	if (!arvif) {
+		ath10k_warn(ar, "wmi-event-beacon-tx, could not find vdev for id: %u\n",
+			    vdev_id);
+		goto exit;
+	}
+
+	complete(&arvif->beacon_tx_done);
+
+exit:
+	spin_unlock_bh(&ar->data_lock);
+}
+
 static int ath10k_wmi_event_pdev_bss_chan_info(struct ath10k *ar,
 					       struct sk_buff *skb)
 {
@@ -5606,6 +5637,9 @@ static void ath10k_wmi_10_1_op_rx(struct ath10k *ar, struct sk_buff *skb)
 	case WMI_10_1_PDEV_BSS_CHAN_INFO_EVENTID: /* Newer CT firmware supports this */
 		ath10k_wmi_event_pdev_bss_chan_info(ar, skb);
 		break;
+	case WMI_10_1_BEACON_TX_EVENTID: /* Feb 28, 2019 CT firmware supports this */
+		ath10k_wmi_event_beacon_tx(ar, skb);
+		break;
 	default:
 		ath10k_warn(ar, "Unknown (10.1) eventid: %d\n", id);
 		break;
@@ -5861,6 +5895,9 @@ static void ath10k_wmi_10_4_op_rx(struct ath10k *ar, struct sk_buff *skb)
 		break;
 	case WMI_10_4_TXBF_CV_MESG_EVENTID:
 		ath10k_wmi_event_txbf_cv_mesg(ar, skb);
+		break;
+	case WMI_10_4_BEACON_TX_EVENTID: /* Feb 28, 2019 CT firmware supports this */
+		ath10k_wmi_event_beacon_tx(ar, skb);
 		break;
 	case WMI_10_4_CSI_MESG_EVENTID:
 		ath10k_wmi_event_csi_mesg(ar, skb);

@@ -5811,6 +5811,10 @@ static int ath10k_add_interface(struct ieee80211_hw *hw,
 	arvif->ar = ar;
 	arvif->vif = vif;
 
+	init_completion(&arvif->beacon_tx_done);
+	/* start completed since we have not sent any beacons yet */
+	complete(&arvif->beacon_tx_done);
+
 	INIT_LIST_HEAD(&arvif->list);
 	INIT_WORK(&arvif->ap_csa_work, ath10k_mac_vif_ap_csa_work);
 	INIT_DELAYED_WORK(&arvif->connection_loss_work,
@@ -6142,14 +6146,20 @@ static void ath10k_remove_interface(struct ieee80211_hw *hw,
 
 	mutex_lock(&ar->conf_mutex);
 
-	spin_lock_bh(&ar->data_lock);
-	ath10k_mac_vif_beacon_cleanup(arvif);
-	spin_unlock_bh(&ar->data_lock);
-
 	ret = ath10k_spectral_vif_stop(arvif);
 	if (ret)
 		ath10k_warn(ar, "failed to stop spectral for vdev %i: %d\n",
 			    arvif->vdev_id, ret);
+
+	if (test_bit(ATH10K_FW_FEATURE_BEACON_TX_CB_CT,
+		      ar->running_fw->fw_file.fw_features)) {
+		int time_left;
+
+		time_left = wait_for_completion_timeout(&arvif->beacon_tx_done, (3 * HZ));
+		if (!time_left)
+			ath10k_warn(ar, "WARNING: failed to wait for beacon tx callback for vdev %i: %d\n",
+				    arvif->vdev_id, ret);
+	}
 
 	ar->free_vdev_map |= 1LL << arvif->vdev_id;
 	spin_lock_bh(&ar->data_lock);
@@ -6204,6 +6214,10 @@ static void ath10k_remove_interface(struct ieee80211_hw *hw,
 			peer->vif = NULL;
 		}
 	}
+
+	/* Clean this up late, less opportunity for firmware to access
+	   DMA memory we have deleted. */
+	ath10k_mac_vif_beacon_cleanup(arvif);
 	spin_unlock_bh(&ar->data_lock);
 
 	ath10k_peer_cleanup(ar, arvif->vdev_id);
@@ -7149,13 +7163,6 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 			   ar->num_stations + 1, ar->max_num_stations,
 			   ar->num_peers + 1, ar->max_num_peers);
 
-		if (ath10k_debug_is_extd_tx_stats_enabled(ar)) {
-			arsta->tx_stats = kzalloc(sizeof(*arsta->tx_stats),
-						  GFP_KERNEL);
-			if (!arsta->tx_stats)
-				goto exit;
-		}
-
 		num_tdls_stations = ath10k_mac_tdls_vif_stations_count(hw, vif);
 		num_tdls_vifs = ath10k_mac_tdls_vifs_count(hw);
 
@@ -7177,12 +7184,22 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 			goto exit;
 		}
 
+		if (ath10k_debug_is_extd_tx_stats_enabled(ar)) {
+			arsta->tx_stats = kzalloc(sizeof(*arsta->tx_stats),
+						  GFP_KERNEL);
+			if (!arsta->tx_stats) {
+				ret = -ENOMEM;
+				goto exit;
+			}
+		}
+
 		ret = ath10k_peer_create(ar, vif, sta, arvif->vdev_id,
 					 sta->addr, peer_type);
 		if (ret) {
 			ath10k_warn(ar, "failed to add peer %pM for vdev %d when adding a new sta: %i\n",
 				    sta->addr, arvif->vdev_id, ret);
 			ath10k_mac_dec_num_stations(arvif, sta);
+			kfree(arsta->tx_stats);
 			goto exit;
 		}
 
@@ -7195,6 +7212,7 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 			spin_unlock_bh(&ar->data_lock);
 			ath10k_peer_delete(ar, arvif->vdev_id, sta->addr);
 			ath10k_mac_dec_num_stations(arvif, sta);
+			kfree(arsta->tx_stats);
 			ret = -ENOENT;
 			goto exit;
 		}
@@ -7215,6 +7233,7 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 			ath10k_peer_delete(ar, arvif->vdev_id,
 					   sta->addr);
 			ath10k_mac_dec_num_stations(arvif, sta);
+			kfree(arsta->tx_stats);
 			goto exit;
 		}
 
@@ -7226,6 +7245,7 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 				    sta->addr, arvif->vdev_id, ret);
 			ath10k_peer_delete(ar, arvif->vdev_id, sta->addr);
 			ath10k_mac_dec_num_stations(arvif, sta);
+			kfree(arsta->tx_stats);
 
 			if (num_tdls_stations != 0)
 				goto exit;
@@ -7240,9 +7260,6 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 		ath10k_dbg(ar, ATH10K_DBG_MAC,
 			   "mac vdev %d peer delete %pM sta %pK (sta gone)\n",
 			   arvif->vdev_id, sta->addr, sta);
-
-		if (ath10k_debug_is_extd_tx_stats_enabled(ar))
-			kfree(arsta->tx_stats);
 
 		if (sta->tdls) {
 			ret = ath10k_mac_tdls_peer_update(ar, arvif->vdev_id,
@@ -7282,6 +7299,11 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 			}
 		}
 		spin_unlock_bh(&ar->data_lock);
+
+		if (ath10k_debug_is_extd_tx_stats_enabled(ar)) {
+			kfree(arsta->tx_stats);
+			arsta->tx_stats = NULL;
+		}
 
 		for (i = 0; i < ARRAY_SIZE(sta->txq); i++)
 			ath10k_mac_txq_unref(ar, sta->txq[i]);
@@ -9755,6 +9777,7 @@ int ath10k_mac_register(struct ath10k *ar)
 				goto err_free;
 
 			ATH_ASSIGN_CONST_U16(ar->if_comb[0].limits[0].max, ar->max_num_vdevs);
+			ATH_ASSIGN_CONST_U16(ar->if_comb[0].limits[2].max, min(ar->max_num_vdevs, 24)); /* vap limits */
 			ar->if_comb[0].max_interfaces = ar->max_num_vdevs;
 			ar->hw->wiphy->interface_modes |= BIT(NL80211_IFTYPE_ADHOC);
 
@@ -9806,8 +9829,7 @@ int ath10k_mac_register(struct ath10k *ar)
 			ATH_ASSIGN_CONST_U16(ar->if_comb[0].limits[0].max, ar->max_num_vdevs);
 			ar->if_comb[0].max_interfaces = ar->max_num_vdevs;
 
-			if (ar->if_comb[0].limits[1].max > ar->max_num_vdevs)
-				ATH_ASSIGN_CONST_U16(ar->if_comb[0].limits[1].max, ar->max_num_vdevs);
+			ATH_ASSIGN_CONST_U16(ar->if_comb[0].limits[1].max, min(ar->max_num_vdevs, 24)); /* vap limits */
 
 			ar->hw->wiphy->interface_modes |= BIT(NL80211_IFTYPE_ADHOC);
 

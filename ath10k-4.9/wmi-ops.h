@@ -893,25 +893,33 @@ ath10k_wmi_peer_assoc(struct ath10k *ar,
 }
 
 static inline int
-ath10k_wmi_beacon_send_ref_nowait(struct ath10k *ar, u32 vdev_id,
+ath10k_wmi_beacon_send_ref_nowait(struct ath10k_vif *arvif,
 				  const void *bcn, size_t bcn_len,
 				  u32 bcn_paddr, bool dtim_zero,
 				  bool deliver_cab)
 {
 	struct sk_buff *skb;
 	int ret;
+	struct ath10k *ar = arvif->ar;
 
 	if (!ar->wmi.ops->gen_beacon_dma)
 		return -EOPNOTSUPP;
 
-	skb = ar->wmi.ops->gen_beacon_dma(ar, vdev_id, bcn, bcn_len, bcn_paddr,
+	skb = ar->wmi.ops->gen_beacon_dma(ar, arvif->vdev_id, bcn, bcn_len, bcn_paddr,
 					  dtim_zero, deliver_cab);
 	if (IS_ERR(skb))
 		return PTR_ERR(skb);
 
+	spin_lock_bh(&ar->data_lock);
+	reinit_completion(&arvif->beacon_tx_done);
+	spin_unlock_bh(&ar->data_lock);
+
 	ret = ath10k_wmi_cmd_send_nowait(ar, skb,
 					 ar->wmi.cmd->pdev_send_bcn_cmdid);
 	if (ret) {
+		spin_lock_bh(&ar->data_lock);
+		complete(&arvif->beacon_tx_done);
+		spin_unlock_bh(&ar->data_lock);
 		dev_kfree_skb(skb);
 		return ret;
 	}

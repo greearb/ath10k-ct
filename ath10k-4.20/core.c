@@ -569,6 +569,7 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 		.hw_ops = &wcn3990_ops,
 		.decap_align_bytes = 1,
 		.num_peers = TARGET_HL_10_TLV_NUM_PEERS,
+		.n_cipher_suites = 8,
 		.ast_skid_limit = TARGET_HL_10_TLV_AST_SKID_LIMIT,
 		.num_wds_entries = TARGET_HL_10_TLV_NUM_WDS_ENTRIES,
 		.target_64bit = true,
@@ -622,6 +623,7 @@ static const char *const ath10k_core_fw_feature_str[] = {
 	[ATH10K_FW_FEATURE_RETRY_GT2_CT] = "retry-gt2-CT",
 	[ATH10K_FW_FEATURE_CT_STA] = "CT-STA",
 	[ATH10K_FW_FEATURE_TXRATE2_CT] = "txrate2-CT",
+	[ATH10K_FW_FEATURE_BEACON_TX_CB_CT] = "beacon-cb-CT",
 };
 
 static unsigned int ath10k_core_get_fw_feature_str(char *buf,
@@ -2767,11 +2769,13 @@ static int ath10k_core_init_firmware_features(struct ath10k *ar)
 		if (test_bit(ATH10K_FW_FEATURE_WMI_10X_CT,
 			     fw_file->fw_features)) {
 			ar->skid_limit = TARGET_10X_AST_SKID_LIMIT_CT;
+			max_num_peers = ath10k_modparam_target_num_peers_ct;
 			ar->max_num_peers = ath10k_modparam_target_num_peers_ct;
 			ar->max_num_stations = TARGET_10X_NUM_STATIONS;
 			ar->max_num_vdevs = ath10k_modparam_target_num_vdevs_ct;
 			ar->htt.max_num_pending_tx = ath10k_modparam_target_num_msdu_desc_ct;
 		} else {
+			max_num_peers = TARGET_10X_NUM_PEERS;
 			ar->max_num_peers = TARGET_10X_NUM_PEERS;
 			ar->max_num_stations = TARGET_10X_NUM_STATIONS;
 			ar->max_num_vdevs = TARGET_10X_NUM_VDEVS;

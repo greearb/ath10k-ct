@@ -5787,6 +5787,10 @@ static int ath10k_add_interface(struct ieee80211_hw *hw,
 	arvif->ar = ar;
 	arvif->vif = vif;
 
+	init_completion(&arvif->beacon_tx_done);
+	/* start completed since we have not sent any beacons yet */
+	complete(&arvif->beacon_tx_done);
+
 	INIT_LIST_HEAD(&arvif->list);
 	INIT_WORK(&arvif->ap_csa_work, ath10k_mac_vif_ap_csa_work);
 	INIT_DELAYED_WORK(&arvif->connection_loss_work,
@@ -6118,14 +6122,20 @@ static void ath10k_remove_interface(struct ieee80211_hw *hw,
 
 	mutex_lock(&ar->conf_mutex);
 
-	spin_lock_bh(&ar->data_lock);
-	ath10k_mac_vif_beacon_cleanup(arvif);
-	spin_unlock_bh(&ar->data_lock);
-
 	ret = ath10k_spectral_vif_stop(arvif);
 	if (ret)
 		ath10k_warn(ar, "failed to stop spectral for vdev %i: %d\n",
 			    arvif->vdev_id, ret);
+
+	if (test_bit(ATH10K_FW_FEATURE_BEACON_TX_CB_CT,
+		      ar->running_fw->fw_file.fw_features)) {
+		int time_left;
+
+		time_left = wait_for_completion_timeout(&arvif->beacon_tx_done, (3 * HZ));
+		if (!time_left)
+			ath10k_warn(ar, "WARNING: failed to wait for beacon tx callback for vdev %i: %d\n",
+				    arvif->vdev_id, ret);
+	}
 
 	ar->free_vdev_map |= 1LL << arvif->vdev_id;
 	spin_lock_bh(&ar->data_lock);
@@ -6180,6 +6190,10 @@ static void ath10k_remove_interface(struct ieee80211_hw *hw,
 			peer->vif = NULL;
 		}
 	}
+
+	/* Clean this up late, less opportunity for firmware to access
+	   DMA memory we have deleted. */
+	ath10k_mac_vif_beacon_cleanup(arvif);
 	spin_unlock_bh(&ar->data_lock);
 
 	ath10k_peer_cleanup(ar, arvif->vdev_id);
@@ -9639,6 +9653,7 @@ int ath10k_mac_register(struct ath10k *ar)
 				goto err_free;
 
 			ATH_ASSIGN_CONST_U16(ar->if_comb[0].limits[0].max, ar->max_num_vdevs);
+			ATH_ASSIGN_CONST_U16(ar->if_comb[0].limits[2].max, min(ar->max_num_vdevs, 24)); /* vap limits */
 			ar->if_comb[0].max_interfaces = ar->max_num_vdevs;
 			ar->hw->wiphy->interface_modes |= BIT(NL80211_IFTYPE_ADHOC);
 
@@ -9687,8 +9702,7 @@ int ath10k_mac_register(struct ath10k *ar)
 			ATH_ASSIGN_CONST_U16(ar->if_comb[0].limits[0].max, ar->max_num_vdevs);
 			ar->if_comb[0].max_interfaces = ar->max_num_vdevs;
 
-			if (ar->if_comb[0].limits[1].max > ar->max_num_vdevs)
-				ATH_ASSIGN_CONST_U16(ar->if_comb[0].limits[1].max, ar->max_num_vdevs);
+			ATH_ASSIGN_CONST_U16(ar->if_comb[0].limits[1].max, min(ar->max_num_vdevs, 24)); /* vap limits */
 
 			ar->hw->wiphy->interface_modes |= BIT(NL80211_IFTYPE_ADHOC);
 

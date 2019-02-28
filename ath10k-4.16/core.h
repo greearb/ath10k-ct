@@ -429,6 +429,7 @@ enum ath10k_beacon_state {
 
 struct ath10k_vif {
 	struct list_head list;
+	struct completion beacon_tx_done;
 
 	u32 vdev_id;
 	u16 peer_id;
@@ -806,6 +807,11 @@ enum ath10k_fw_features {
 
 	/* TX-Rate v2 is reported. */
 	ATH10K_FW_FEATURE_TXRATE2_CT = 49,
+
+	/* Firmware will send a beacon-tx-callback message so driver knows when
+	 * beacon buffer can be released.
+	 */
+	ATH10K_FW_FEATURE_BEACON_TX_CB_CT = 50,
 
 	/* keep last */
 	ATH10K_FW_FEATURE_COUNT,
