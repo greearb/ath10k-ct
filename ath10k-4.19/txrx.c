@@ -73,8 +73,14 @@ static void ath10k_set_tx_rate_status(struct ath10k *ar,
 		ch = ar->rx_channel;
 
 	if (tx_done->mpdus_failed) {
-		/* Maybe there is a better way to report this tried vs failed stat up the stack? */
-		rate->count = tx_done->mpdus_failed + 1;
+		if (tx_done->status == HTT_TX_COMPL_STATE_ACK) {
+			/* We failed some, but then succeeded (+1) */
+			rate->count = tx_done->mpdus_failed + 1;
+		}
+		else {
+			/* We failed all of them */
+			rate->count = tx_done->mpdus_failed;
+		}
 	}
 	else {
 		rate->count = 1;
@@ -134,6 +140,18 @@ static void ath10k_set_tx_rate_status(struct ath10k *ar,
 		rate->flags |= IEEE80211_TX_RC_SHORT_GI;
 }
 
+#if 0
+static const char* tx_done_state_str(int i) {
+	switch (i) {
+	case HTT_TX_COMPL_STATE_NONE: return "NONE";
+	case HTT_TX_COMPL_STATE_ACK: return "ACK";
+	case HTT_TX_COMPL_STATE_NOACK: return "NOACK";
+	case HTT_TX_COMPL_STATE_DISCARD: return "DISCARD";
+	default: return "UNKNOWN";
+	}
+}
+#endif
+
 int ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 			 const struct htt_tx_done *tx_done)
 {
@@ -164,6 +182,17 @@ int ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 		spin_unlock_bh(&htt->tx_lock);
 		return -ENOENT;
 	}
+
+	/*ath10k_warn(ar,
+		    "tx_unref, msdu_id: %d len: %d  tx-rate-code: 0x%x tx-rate-flags: 0x%x  tried: %d  failed: %d ack-rssi: %d status: %d (%s)\n",
+		    tx_done->msdu_id,
+		    msdu->len,
+		    tx_done->tx_rate_code,
+		    tx_done->tx_rate_flags,
+		    tx_done->mpdus_tried,
+		    tx_done->mpdus_failed,
+		    tx_done->ack_rssi,
+		    tx_done->status, tx_done_state_str(tx_done->status));*/
 
 	skb_cb = ATH10K_SKB_CB(msdu);
 	txq = skb_cb->txq;

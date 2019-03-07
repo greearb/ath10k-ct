@@ -2063,13 +2063,19 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 					tx_done.mpdus_failed = retries_info >> 8;
 				}
 			}
-			/* ath10k_warn(ar,
-				    "htt tx completion-w2, msdu_id: %d  tx-rate-code: 0x%x tx-rate-flags: 0x%x  tried: %d  failed: %d\n",
+			/*ath10k_warn(ar,
+				    "htt tx completion-w2, msdu_id: %d  tx-rate-code: 0x%x tx-rate-flags: 0x%x  tried: %d  failed: %d ack-rssi: %d\n",
 				    tx_done.msdu_id,
 				    tx_done.tx_rate_code,
 				    tx_done.tx_rate_flags,
 				    tx_done.mpdus_tried,
-				    tx_done.mpdus_failed);*/
+				    tx_done.mpdus_failed,
+				    tx_done.ack_rssi);*/
+
+			/* Firmware reports garbage for ack-rssi if packet was not acked. */
+			if (unlikely(tx_done.status != HTT_TX_COMPL_STATE_ACK))
+				tx_done.ack_rssi = 0;
+
 			ath10k_txrx_tx_unref(htt, &tx_done);
 		}
 	} else {
