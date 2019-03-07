@@ -4071,16 +4071,18 @@ static void ath10k_dfs_radar_report(struct ath10k *ar,
 	}
 
 radar_detected:
-	ath10k_dbg(ar, ATH10K_DBG_REGULATORY, "dfs radar detected: %s\n", pe.msg);
 	ATH10K_DFS_STAT_INC(ar, radar_detected);
 
 #ifdef ATH_HAVE_PULSE_EVENT_MSG /* so we can compile out-of-tree easier */
+	ath10k_dbg(ar, ATH10K_DBG_REGULATORY, "dfs radar detected: %s\n", pe.msg);
 	if (pe.msg[0]) {
 		strncpy(ar->debug.dfs_last_msg, pe.msg,
 			sizeof(ar->debug.dfs_last_msg));
 		/* ensure null term */
 		ar->debug.dfs_last_msg[sizeof(ar->debug.dfs_last_msg) - 1] = 0;
 	}
+#else
+	ath10k_dbg(ar, ATH10K_DBG_REGULATORY, "dfs radar detected\n");
 #endif
 
 	/* Control radar events reporting in debugfs file
