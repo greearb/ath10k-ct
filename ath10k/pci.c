@@ -2801,14 +2801,25 @@ static int ath10k_pci_chip_reset(struct ath10k *ar)
 static int ath10k_pci_hif_power_up(struct ath10k *ar)
 {
 	struct ath10k_pci *ar_pci = ath10k_pci_priv(ar);
+	struct pci_dev *pdev = ar_pci->pdev;
 	int ret;
+	u32 val;
 
 	ath10k_dbg(ar, ATH10K_DBG_BOOT, "boot hif power up\n");
 
-	pcie_capability_read_word(ar_pci->pdev, PCI_EXP_LNKCTL,
+	if (ar->dev_id == QCA988X_2_0_DEVICE_ID) {
+		pci_read_config_dword(pdev, 0x70c, &val);
+		if ((val & 0xff000000) == 0x17000000) {
+			val &= 0x00ffffff;
+			val |= 0x27000000;
+			pci_write_config_dword(pdev, 0x570c, val);
+		}
+	} else {
+		pcie_capability_read_word(ar_pci->pdev, PCI_EXP_LNKCTL,
 				  &ar_pci->link_ctl);
-	pcie_capability_write_word(ar_pci->pdev, PCI_EXP_LNKCTL,
+		pcie_capability_write_word(ar_pci->pdev, PCI_EXP_LNKCTL,
 				   ar_pci->link_ctl & ~PCI_EXP_LNKCTL_ASPMC);
+	}
 
 	/*
 	 * Bring the target up cleanly.
