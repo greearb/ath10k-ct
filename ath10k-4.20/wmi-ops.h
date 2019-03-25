@@ -1020,7 +1020,7 @@ ath10k_wmi_beacon_send_ref_nowait(struct ath10k_vif *arvif,
 	spin_lock_bh(&ar->data_lock);
 	reinit_completion(&arvif->beacon_tx_done);
 	spin_unlock_bh(&ar->data_lock);
-	
+
 	ret = ath10k_wmi_cmd_send_nowait(ar, skb,
 					 ar->wmi.cmd->pdev_send_bcn_cmdid);
 	if (ret) {

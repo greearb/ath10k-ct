@@ -906,6 +906,7 @@ struct wmi_cmd_map {
 	u32 sta_keepalive_cmd;
 	u32 echo_cmdid;
 	u32 pdev_utf_cmdid;
+	u32 pdev_consume_block_ack_cmdid;
 	u32 dbglog_cfg_cmdid;
 	u32 pdev_qvit_cmdid;
 	u32 pdev_ftm_intg_cmdid;
@@ -1464,6 +1465,7 @@ enum wmi_10x_cmd_id {
 	WMI_10X_SET_CCA_PARAMS_CMDID,
 	WMI_10X_PDEV_BSS_CHAN_INFO_REQUEST,
 
+	WMI_PDEV_CONSUME_BLOCK_ACK_CMDID_CT = WMI_10X_END_CMDID - 102, /* CT Specific Command ID */
 	WMI_PDEV_SET_SPECIAL_CMDID = WMI_10X_END_CMDID - 101, /* CT only:  special hack (cts/slot/cifs/ack timers, etc) */
 	WMI_NOP = WMI_10X_END_CMDID - 100, /* CT only:  wmi transport keep-alive, basically */
 
@@ -1879,6 +1881,7 @@ enum wmi_10_4_cmd_id {
 	WMI_10_4_PDEV_SET_BRIDGE_MACADDR_CMDID,
 	WMI_10_4_ATF_GROUP_WMM_AC_CONFIG_REQUEST_CMDID,
 	WMI_10_4_RADAR_FOUND_CMDID,
+	WMI_10_4_PDEV_CONSUME_BLOCK_ACK_CMDID_CT = WMI_10_4_END_CMDID - 102, /* CT Specific Command ID */
 	WMI_10_4_PDEV_UTF_CMDID = WMI_10_4_END_CMDID - 1,
 };
 
@@ -6657,6 +6660,13 @@ struct wmi_10_1_peer_assoc_complete_cmd_ct {
 	struct wmi_ct_assoc_overrides overrides;
 } __packed;
 
+struct wmi_pdev_consume_block_ack {
+	__le32 vdev_id;
+	__le16 flags; /* currently unused, must be set to zero */
+	__le16 skb_len;
+	unsigned char skb_data[0]; /* skb contents are copied here, 200 bytes or less */
+};
+
 #define WMI_PEER_ASSOC_INFO0_MAX_MCS_IDX_LSB 0
 #define WMI_PEER_ASSOC_INFO0_MAX_MCS_IDX_MASK 0x0f
 #define WMI_PEER_ASSOC_INFO0_MAX_NSS_LSB 4
@@ -7657,6 +7667,7 @@ void ath10k_wmi_tpc_config_get_rate_code(u8 *rate_code, u16 *pream_table,
 					 u32 num_tx_chain);
 void ath10k_wmi_event_tpc_final_table(struct ath10k *ar, struct sk_buff *skb);
 void ath10k_wmi_stop_scan_work(struct work_struct *work);
+int ath10k_wmi_consume_block_ack(struct ath10k *ar, struct ath10k_vif *arvif, struct sk_buff *skb);
 
 #ifdef CONFIG_ATH10K_DEBUGFS
 /* TODO:  Should really enable this all the time, not just when DEBUGFS is enabled. --Ben */

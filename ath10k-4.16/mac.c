@@ -4930,6 +4930,32 @@ static int ath10k_start_scan(struct ath10k *ar,
 /* mac80211 callbacks */
 /**********************/
 
+static int ath10k_mac_consume_block_ack(struct ieee80211_hw *hw,
+					struct ieee80211_vif *vif,
+					struct sk_buff *skb)
+{
+	struct ath10k *ar = hw->priv;
+	struct ieee80211_mgmt *mgmt = (void *)skb->data;
+	struct ath10k_vif *arvif = (void *)vif->drv_priv;
+
+	/*ath10k_warn(ar, "mac-consume-ba called.\n");*/
+	if (!(test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+		       ar->running_fw->fw_file.fw_features) &&
+	      ar->request_nohwcrypt))
+		return -EINVAL; /* Not running swcrypt, don't need this */
+
+	if (ieee80211_is_action(mgmt->frame_control) &&
+		    mgmt->u.action.category == WLAN_CATEGORY_BACK) {
+		int rv = ath10k_wmi_consume_block_ack(ar, arvif, skb);
+		if (rv) {
+			ath10k_warn(ar, "consume-block-ack failed: %d\n", rv);
+		}
+		return rv;
+	}
+	return -EINVAL;
+}
+
+
 static void ath10k_mac_op_tx(struct ieee80211_hw *hw,
 			     struct ieee80211_tx_control *control,
 			     struct sk_buff *skb)
@@ -8740,6 +8766,7 @@ static const struct ieee80211_ops ath10k_ops = {
 #ifdef CONFIG_MAC80211_DEBUGFS
 	.sta_add_debugfs		= ath10k_sta_add_debugfs,
 #endif
+	.consume_block_ack		= ath10k_mac_consume_block_ack,
 };
 
 #define CHAN2G(_channel, _freq, _flags) { \

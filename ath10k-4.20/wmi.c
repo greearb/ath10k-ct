@@ -317,6 +317,7 @@ static struct wmi_cmd_map wmi_10x_cmd_map = {
 	.sta_keepalive_cmd = WMI_CMD_UNSUPPORTED,
 	.echo_cmdid = WMI_10X_ECHO_CMDID,
 	.pdev_utf_cmdid = WMI_10X_PDEV_UTF_CMDID,
+	.pdev_consume_block_ack_cmdid = WMI_PDEV_CONSUME_BLOCK_ACK_CMDID_CT,
 	.dbglog_cfg_cmdid = WMI_10X_DBGLOG_CFG_CMDID,
 	.pdev_qvit_cmdid = WMI_10X_PDEV_QVIT_CMDID,
 	.pdev_ftm_intg_cmdid = WMI_CMD_UNSUPPORTED,
@@ -656,6 +657,7 @@ static struct wmi_cmd_map wmi_10_4_cmd_map = {
 	.sta_keepalive_cmd = WMI_CMD_UNSUPPORTED,
 	.echo_cmdid = WMI_10_4_ECHO_CMDID,
 	.pdev_utf_cmdid = WMI_10_4_PDEV_UTF_CMDID,
+	.pdev_consume_block_ack_cmdid = WMI_10_4_PDEV_CONSUME_BLOCK_ACK_CMDID_CT,
 	.dbglog_cfg_cmdid = WMI_10_4_DBGLOG_CFG_CMDID,
 	.pdev_qvit_cmdid = WMI_10_4_PDEV_QVIT_CMDID,
 	.pdev_ftm_intg_cmdid = WMI_CMD_UNSUPPORTED,
@@ -1662,6 +1664,40 @@ static const struct wmi_peer_flags_map wmi_10_2_peer_flags_map = {
 	.bw160 = WMI_10_2_PEER_160MHZ,
 };
 
+int ath10k_wmi_consume_block_ack(struct ath10k *ar, struct ath10k_vif *arvif, struct sk_buff *ba_skb)
+{
+	struct wmi_pdev_consume_block_ack *cmd;
+	int cmd_id = ar->wmi.cmd->pdev_consume_block_ack_cmdid;
+	struct sk_buff *wskb;
+	int ba_skb_len = ba_skb->len;
+	if (ba_skb_len > 200)
+		ba_skb_len = 200;
+
+	/*ath10k_warn(ar, "wmi consume block ack, vdev: %d  peer: %d  ba_skb->len: %d (%d)\n",
+		   arvif->vdev_id, arvif->peer_id, ba_skb->len, ba_skb_len);*/
+
+	if ((cmd_id == WMI_CMD_UNSUPPORTED) ||
+	    (! test_bit(ATH10K_FW_FEATURE_CONSUME_BLOCK_ACK_CT,
+			ar->running_fw->fw_file.fw_features)))
+		return -EOPNOTSUPP;
+
+	wskb = ath10k_wmi_alloc_skb(ar, sizeof(*cmd) + round_up(ba_skb_len, 4));
+	if (!wskb)
+		return -ENOMEM;
+
+	cmd = (struct wmi_pdev_consume_block_ack *)wskb->data;
+	cmd->vdev_id = __cpu_to_le32(arvif->vdev_id);
+	cmd->skb_len = __cpu_to_le16(ba_skb_len);
+	cmd->flags = __cpu_to_le16(0);
+
+	memcpy(cmd->skb_data, ba_skb->data, ba_skb_len);
+
+	ath10k_dbg(ar, ATH10K_DBG_WMI, "wmi consume block ack, vdev: %d  peer: %d  ba_skb->len: %d (%d)\n",
+		   arvif->vdev_id, arvif->peer_id, ba_skb->len, ba_skb_len);
+
+	return ath10k_wmi_cmd_send(ar, wskb, cmd_id);
+}
+
 static bool ath10k_ok_skip_ch_reservation(struct ath10k *ar, u32 vdev_id)
 {
 	struct ath10k_vif *arvif;
@@ -2412,6 +2448,12 @@ static int ath10k_wmi_10_4_op_pull_mgmt_rx_ev(struct ath10k *ar,
 static bool ath10k_wmi_rx_is_decrypted(struct ath10k *ar,
 				       struct ieee80211_hdr *hdr)
 {
+	/* If using rx-sw-crypt, it is not decrypted */
+	if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+		     ar->running_fw->fw_file.fw_features) &&
+	    ar->request_nohwcrypt)
+		return false;
+
 	if (!ieee80211_has_protected(hdr->frame_control))
 		return false;
 
@@ -2604,9 +2646,9 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 		ath10k_mac_handle_beacon(ar, skb);
 
 	ath10k_dbg(ar, ATH10K_DBG_MGMT,
-		   "event mgmt rx skb %pK len %d ftype %02x stype %02x\n",
+		   "event mgmt rx skb %pK len %d ftype %02x stype %02x decrypted: %d\n",
 		   skb, skb->len,
-		   fc & IEEE80211_FCTL_FTYPE, fc & IEEE80211_FCTL_STYPE);
+		   fc & IEEE80211_FCTL_FTYPE, fc & IEEE80211_FCTL_STYPE, ath10k_wmi_rx_is_decrypted(ar, hdr));
 
 	ath10k_dbg(ar, ATH10K_DBG_MGMT,
 		   "event mgmt rx freq %d band %d snr %d chains: 0x%x(%d %d %d %d), rate_idx %d\n",

@@ -556,7 +556,7 @@ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
 	{
 		.id = WCN3990_HW_1_0_DEV_VERSION,
 		.dev_id = 0,
-		.bus = ATH10K_BUS_PCI,
+		.bus = ATH10K_BUS_SNOC,
 		.name = "wcn3990 hw1.0",
 		.continuous_frag_desc = true,
 		.tx_chain_mask = 0x7,
@@ -624,6 +624,7 @@ static const char *const ath10k_core_fw_feature_str[] = {
 	[ATH10K_FW_FEATURE_CT_STA] = "CT-STA",
 	[ATH10K_FW_FEATURE_TXRATE2_CT] = "txrate2-CT",
 	[ATH10K_FW_FEATURE_BEACON_TX_CB_CT] = "beacon-cb-CT",
+	[ATH10K_FW_FEATURE_CONSUME_BLOCK_ACK_CT] = "wmi-block-ack-CT",
 };
 
 static unsigned int ath10k_core_get_fw_feature_str(char *buf,
