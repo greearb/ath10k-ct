@@ -1887,6 +1887,9 @@ static void ath10k_wmi_tx_beacon_nowait(struct ath10k_vif *arvif)
 							cb->paddr,
 							dtim_zero,
 							deliver_cab);
+		ath10k_dbg(ar, ATH10K_DBG_BEACON,
+			   "wmi event beacon send, vdev-id: %u  rv: %d\n",
+			   arvif->vdev_id, ret);
 
 		spin_lock_bh(&ar->data_lock);
 
@@ -5987,6 +5990,7 @@ static void ath10k_wmi_event_beacon_tx(struct ath10k *ar, struct sk_buff *skb)
 	struct ath10k_vif *arvif;
 	const struct wmi_beacon_tx_event *ev;
 	u32 vdev_id;
+	u32 status;
 
 	spin_lock_bh(&ar->data_lock);
 
@@ -5996,10 +6000,13 @@ static void ath10k_wmi_event_beacon_tx(struct ath10k *ar, struct sk_buff *skb)
 		goto exit;
 
 	vdev_id = __le32_to_cpu(ev->vdev_id);
+	status = __le32_to_cpu(ev->tx_status);
 
-	/*ath10k_dbg(ar, ATH10K_DBG_WMI,
-		   "wmi event beacon-tx-complete, vdev-id: %u  completion-status: 0x%x\n",
-		   vdev_id, __le32_to_cpu(ev->tx_status));*/
+	ath10k_dbg(ar, ATH10K_DBG_BEACON,
+		   "wmi event beacon-tx-complete, vdev-id: %u  completion-status: 0x%x (%s) tried: %d failed: %d ratecode: 0x%x rateflags: 0x%x  tsFlags: 0x%x\n",
+		   vdev_id, status,
+		   status == 0 ? "OK" : (status == 1 ? "XRETRY" : (status == 2 ? "DROP" : "UNKNOWN")),
+		   ev->mpdus_tried, ev->mpdus_failed, ev->tx_rate_code, ev->tx_rate_flags, ev->tsFlags);
 
 	arvif = ath10k_get_arvif(ar, vdev_id);
 	if (!arvif) {
