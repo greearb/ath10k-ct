@@ -5872,7 +5872,13 @@ struct wmi_bcn_info {
 struct wmi_beacon_tx_event {
 	__le32 vdev_id;
 	__le32 tx_status;
-	__le32 future[4];
+	u8 mpdus_tried;
+	u8 mpdus_failed;
+	u8 tx_rate_code;
+	u8 tx_rate_flags;
+	u8 tsFlags; /* WHAL_TXS_FLAG_TSF_TIME_FILTERED, etc */
+	u8 future8[3];
+	__le32 future[2];
 };
 
 struct wmi_host_swba_event {

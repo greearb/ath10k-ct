@@ -1220,11 +1220,18 @@ static ssize_t ath10k_read_debug_level(struct file *file,
 		"WMI-PRINT:       0x2000\n"
 		"PCI-PS:          0x4000\n"
 		"AHB:             0x8000\n"
+		"SDIO:		 0x10000\n"
+		"SDIO_DUMP:	 0x20000\n"
+		"USB:		 0x40000\n"
+		"USB_BULK:	 0x80000\n"
+		"SNOC:		0x100000\n"
+		"QMI:		0x200000\n"
+		"BEACONS:      0x8000000\n"
 		"NO-FW-DBGLOG:0x10000000\n"
 		"MAC2:        0x20000000\n"
 		"INFO-AS-DBG: 0x40000000\n"
 		"FW:          0x80000000\n"
-		"ALL:         0xFFFFFFFF\n";
+		"ALL:         0xEFFFFFFF\n";
 	char wbuf[sizeof(buf) + 60];
 	sz = snprintf(wbuf, sizeof(wbuf), "Current debug level: 0x%x\n\n%s",
 		      ath10k_debug_mask, buf);

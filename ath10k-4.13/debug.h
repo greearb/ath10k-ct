@@ -44,6 +44,10 @@ enum ath10k_debug_mask {
 	ATH10K_DBG_AHB		= 0x00008000,
 	ATH10K_DBG_SDIO		= 0x00010000,
 	ATH10K_DBG_SDIO_DUMP	= 0x00020000,
+	ATH10K_DBG_USB_BULK	= 0x00080000,
+	ATH10K_DBG_SNOC		= 0x00100000,
+	ATH10K_DBG_QMI		= 0x00200000,
+	ATH10K_DBG_BEACON       = 0x08000000, /* Print out beacon debug info */
 	ATH10K_DBG_NO_DBGLOG    = 0x10000000, /* Don't print DBGLOG firmware hex messages in kernel logs. */
 	ATH10K_DBG_MAC2	        = 0x20000000, /* more verbose MAC debugging */
 	ATH10K_DBG_INFO_AS_DBG	= 0x40000000,

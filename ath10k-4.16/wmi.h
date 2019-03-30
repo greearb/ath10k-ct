@@ -1421,6 +1421,7 @@ enum wmi_10x_cmd_id {
 	WMI_10X_SET_CCA_PARAMS_CMDID,
 	WMI_10X_PDEV_BSS_CHAN_INFO_REQUEST,
 
+	WMI_PDEV_CONSUME_BLOCK_ACK_CMDID_CT = WMI_10X_END_CMDID - 102, /* CT Specific Command ID */
 	WMI_PDEV_SET_SPECIAL_CMDID = WMI_10X_END_CMDID - 101, /* CT only:  special hack (cts/slot/cifs/ack timers, etc) */
 	WMI_NOP = WMI_10X_END_CMDID - 100, /* CT only:  wmi transport keep-alive, basically */
 
@@ -6067,7 +6068,13 @@ struct wmi_bcn_info {
 struct wmi_beacon_tx_event {
 	__le32 vdev_id;
 	__le32 tx_status;
-	__le32 future[4];
+	u8 mpdus_tried;
+	u8 mpdus_failed;
+	u8 tx_rate_code;
+	u8 tx_rate_flags;
+	u8 tsFlags; /* WHAL_TXS_FLAG_TSF_TIME_FILTERED, etc */
+	u8 future8[3];
+	__le32 future[2];
 };
 
 struct wmi_host_swba_event {
