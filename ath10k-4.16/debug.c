@@ -430,6 +430,30 @@ static void ath10k_debug_fw_stats_reset(struct ath10k *ar)
 	spin_unlock_bh(&ar->data_lock);
 }
 
+void ath10k_debug_fw_ratepwr_table_process(struct ath10k *ar, struct sk_buff *skb)
+{
+	size_t sz = skb->len;
+	if (sz != sizeof(struct qc988xxEepromRateTbl)) {
+		ath10k_info(ar, "Invalid ratepwr table results length, expected: %d  got: %d\n",
+			    (int)(sizeof(struct qc988xxEepromRateTbl)), (int)sz);
+		sz = min(sz, sizeof(struct qc988xxEepromRateTbl));
+	}
+	memcpy(ar->debug.ratepwr_tbl.data, skb->data, sz);
+	complete(&ar->debug.ratepwr_tbl_complete);
+}
+
+void ath10k_debug_fw_powerctl_table_process(struct ath10k *ar, struct sk_buff *skb)
+{
+	size_t sz = skb->len;
+	if (sz != sizeof(struct qca9880_power_ctrl)) {
+		ath10k_info(ar, "Invalid powerctl table results length, expected: %d  got: %d\n",
+			    (int)(sizeof(struct qca9880_power_ctrl)), (int)sz);
+		sz = min(sz, sizeof(struct qca9880_power_ctrl));
+	}
+	memcpy(ar->debug.powerctl_tbl.data, skb->data, sz);
+	complete(&ar->debug.powerctl_tbl_complete);
+}
+
 void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 {
 	struct ath10k_fw_stats stats = {};
@@ -2173,6 +2197,129 @@ exit:
 	return ret;
 }
 
+static ssize_t ath10k_read_ratepwr(struct file *file,
+				   char __user *user_buf,
+				   size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	int size = 8000;
+	u8 *buf = kzalloc(size, GFP_KERNEL);
+	int retval = 0, len = 0;
+	int mx = sizeof(ar->debug.ratepwr_tbl.data) / 4;
+	int i;
+
+	if (buf == NULL)
+		return -ENOMEM;
+
+	/* TODO:  Locking? */
+
+	if (ar->state == ATH10K_STATE_ON) {
+		unsigned long time_left;
+		int ret;
+
+		reinit_completion(&ar->debug.ratepwr_tbl_complete);
+
+		ret = ath10k_wmi_request_ratepwr_tbl(ar);
+		if (ret) {
+			ath10k_warn(ar, "could not request ratepwr table: ret %d\n",
+				    ret);
+			time_left = 1;
+		}
+		else {
+			time_left = wait_for_completion_timeout(&ar->debug.ratepwr_tbl_complete, 1*HZ);
+		}
+
+		/* ath10k_warn(ar, "Requested ratepwr (type 0x%x ret %d specifier %d jiffies: %lu  time-left: %lu)\n",
+		   type, ret, specifier, jiffies, time_left);*/
+
+		if (time_left == 0)
+			ath10k_warn(ar, "Timeout requesting ratepwr table.\n");
+	}
+
+	len += scnprintf(buf + len, size - len, "RatePower table, length: %d\n",
+			 ar->debug.ratepwr_tbl_len);
+	for (i = 0; i<mx; i++) {
+		len += scnprintf(buf + len, size - len, "%08x ", ar->debug.ratepwr_tbl.data[i]);
+		if (((i + 1) % 8) == 0)
+			buf[len - 1] = '\n';
+	}
+	buf[len - 1] = '\n';
+
+	retval = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+	kfree(buf);
+
+	return retval;
+}
+
+static const struct file_operations fops_ratepwr_table = {
+	.read = ath10k_read_ratepwr,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static ssize_t ath10k_read_powerctl(struct file *file,
+				    char __user *user_buf,
+				    size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	int size = 8000;
+	u8 *buf = kzalloc(size, GFP_KERNEL);
+	int retval = 0, len = 0;
+	int mx = sizeof(ar->debug.powerctl_tbl.data) / 4;
+	int i;
+
+	if (buf == NULL)
+		return -ENOMEM;
+
+	/* TODO:  Locking? */
+
+	if (ar->state == ATH10K_STATE_ON) {
+		unsigned long time_left;
+		int ret;
+
+		reinit_completion(&ar->debug.powerctl_tbl_complete);
+
+		ret = ath10k_wmi_request_powerctl_tbl(ar);
+		if (ret) {
+			ath10k_warn(ar, "could not request powerctl table: ret %d\n",
+				    ret);
+			time_left = 1;
+		}
+		else {
+			time_left = wait_for_completion_timeout(&ar->debug.powerctl_tbl_complete, 1*HZ);
+		}
+
+		/* ath10k_warn(ar, "Requested powerctl (type 0x%x ret %d specifier %d jiffies: %lu  time-left: %lu)\n",
+		   type, ret, specifier, jiffies, time_left);*/
+
+		if (time_left == 0)
+			ath10k_warn(ar, "Timeout requesting powerctl table.\n");
+	}
+
+	len += scnprintf(buf + len, size - len, "PowerCtl table, length: %d\n",
+			 ar->debug.powerctl_tbl_len);
+	for (i = 0; i<mx; i++) {
+		len += scnprintf(buf + len, size - len, "%08x ", ar->debug.powerctl_tbl.data[i]);
+		if (((i + 1) % 8) == 0)
+			buf[len - 1] = '\n';
+	}
+	buf[len - 1] = '\n';
+
+	retval = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+	kfree(buf);
+
+	return retval;
+}
+
+static const struct file_operations fops_powerctl_table = {
+	.read = ath10k_read_powerctl,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+
 /* TODO:  Would be nice to always support ethtool stats, would need to
  * move the stats storage out of ath10k_debug, or always have ath10k_debug
  * struct available..
@@ -2627,13 +2774,13 @@ static void ath10k_tpc_stats_print(struct ath10k_tpc_stats *tpc_stats,
 {
 	int i;
 	size_t buf_len;
-	static const char table_str[][5] = { "CDD",
+	static const char table_str[][5] = { " CDD",
 					     "STBC",
 					     "TXBF" };
-	static const char pream_str[][6] = { "CCK",
-					     "OFDM",
-					     "HT20",
-					     "HT40",
+	static const char pream_str[][6] = { "  CCK",
+					     " OFDM",
+					     " HT20",
+					     " HT40",
 					     "VHT20",
 					     "VHT40",
 					     "VHT80",
@@ -2641,25 +2788,24 @@ static void ath10k_tpc_stats_print(struct ath10k_tpc_stats *tpc_stats,
 
 	buf_len = ATH10K_TPC_CONFIG_BUF_SIZE;
 	*len += scnprintf(buf + *len, buf_len - *len,
-			  "********************************\n");
+			  "*****************************************************\n");
 	*len += scnprintf(buf + *len, buf_len - *len,
 			  "******************* %s POWER TABLE ****************\n",
 			  table_str[j]);
 	*len += scnprintf(buf + *len, buf_len - *len,
-			  "********************************\n");
+			  "*****************************************************\n");
 	*len += scnprintf(buf + *len, buf_len - *len,
 			  "No.  Preamble Rate_code tpc_value1 tpc_value2 tpc_value3\n");
 
 	for (i = 0; i < tpc_stats->rate_max; i++) {
 		*len += scnprintf(buf + *len, buf_len - *len,
-				  "%8d %s 0x%2x %s\n", i,
+				  "%3d     %s   0x%2x %s\n", i,
 				  pream_str[tpc_stats->tpc_table[j].pream_idx[i]],
 				  tpc_stats->tpc_table[j].rate_code[i],
 				  tpc_stats->tpc_table[j].tpc_value[i]);
 	}
 
-	*len += scnprintf(buf + *len, buf_len - *len,
-			  "***********************************\n");
+	*len += scnprintf(buf + *len, buf_len - *len, "\n\n");
 }
 
 static void ath10k_tpc_stats_fill(struct ath10k *ar,
@@ -3223,6 +3369,14 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		/* Not stored in driver, will not be restored upon FW crash/restart */
 		ath10k_warn(ar, "Setting ct-andmask for peer: %d to 0x%x.\n", val >> 16, val & 0x16);
 	}
+	else if (id == SET_SPECIAL_ID_EEPROM_CFG_ADDR_A) {
+		/* Not stored in driver, will not be restored upon FW crash/restart */
+		ath10k_warn(ar, "Adding EEPROM configAddr address setting 0x08%x.\n", val);
+	}
+	else if (id == SET_SPECIAL_ID_EEPROM_CFG_ADDR_V) {
+		/* Not stored in driver, will not be restored upon FW crash/restart */
+		ath10k_warn(ar, "Adding EEPROM configAddr value setting 0x08%x.\n", val);
+	}
 	/* Below here are local driver hacks, and not necessarily passed directly to firmware. */
 	else if (id == 0x1001) {
 		/* Set station failed-transmit kickout threshold. */
@@ -3325,6 +3479,7 @@ static ssize_t ath10k_read_ct_special(struct file *file,
 		"id: 0x11 allow tx-hang logic to try cold resets instead of just warm resets.\n"
 		"id: 0x12 disable special CCA setting for IBSS queues.\n"
 		"id: 0x13 set 5-bit antenna-mask for peer, format:  (peer-id << 16) | ant_mask\n"
+		"id: 0x14 Add a 32-bit sticky register / value override to the eeprom."
 		"\nBelow here should work with most firmware, including non-CT firmware.\n"
 		"id: 0x1001 set sta-kickout threshold due to tx-failures (0 means disable.  Default is 20 * 16.)\n"
 		"id: 0x1002 set su-sounding-timer-ms (0 means use defaults next FW reload.  Default is 100, max is 500)\n"
@@ -3635,6 +3790,8 @@ int ath10k_debug_register(struct ath10k *ar)
 
 	init_completion(&ar->debug.tpc_complete);
 	init_completion(&ar->debug.fw_stats_complete);
+	init_completion(&ar->debug.ratepwr_tbl_complete);
+	init_completion(&ar->debug.powerctl_tbl_complete);
 
 	debugfs_create_file("fw_stats", 0400, ar->debug.debugfs_phy, ar,
 			    &fops_fw_stats);
@@ -3716,6 +3873,12 @@ int ath10k_debug_register(struct ath10k *ar)
 
 	debugfs_create_file("quiet_period", 0644, ar->debug.debugfs_phy, ar,
 			    &fops_quiet_period);
+
+	debugfs_create_file("powerctl_table", 0600, ar->debug.debugfs_phy, ar,
+			    &fops_powerctl_table);
+
+	debugfs_create_file("ratepwr_table", 0600, ar->debug.debugfs_phy, ar,
+			    &fops_ratepwr_table);
 
 	debugfs_create_file("tpc_stats", 0400, ar->debug.debugfs_phy, ar,
 			    &fops_tpc_stats);

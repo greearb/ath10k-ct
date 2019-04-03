@@ -1380,6 +1380,7 @@ enum wmi_10x_event_id {
 
 	WMI_10X_GPIO_INPUT_EVENTID,
 
+	WMI_10_1_GENERIC_BUFFER_EVENTID = 36893, /* Newer CT firmware:  April 2, 2019 */
 	WMI_10_1_PDEV_TEMPERATURE_EVENTID = 36898, /* Newer CT firmware */
 	WMI_10_1_PDEV_BSS_CHAN_INFO_EVENTID = 36900, /* Newer CT firmware */
 	WMI_10_1_BEACON_TX_EVENTID = WMI_10X_END_EVENTID - 4, /* CT FW, beacon tx completed */
@@ -5735,6 +5736,60 @@ enum wmi_sta_powersave_param {
 	WMI_STA_PS_PARAM_UAPSD = 4,
 };
 
+
+enum {
+    WMI_BUFFER_TYPE_RATEPWR_TABLE,
+    WMI_BUFFER_TYPE_CTL_TABLE,
+};
+
+struct wmi_generic_buffer_event {
+	__le32 buf_type; /* See enum above */
+	__le32 frag_id;
+	__le32 more_frag;
+	__le32 buf_len;
+	__le32 buf_info[0];
+};
+
+/* Used by: WMI_PDEV_SET_CTL_TABLE_CMDID */
+struct qca9880_power_ctrl {
+	/* Not sure this can be made public knowledge, so leaving opaque
+	 * for now. --Ben
+	 */
+	u8 data[72 + 72 + 144 + 144];
+};
+
+/* Used by:   WMI_PDEV_SET_MIMOGAIN_TABLE_CMDID */
+struct qca9880_mimo_gain_table {
+	/******************************************************************************
+	 *Bit 7:0 len of array gain table
+	 *Bit 8   bypass multi chain gain or not
+	 ******************************************************************************/
+	__le32 mimogain_info;
+	/** array gain table(s) (len adjusted to  number of words) */
+	__le32 arraygain_tbl[0]; /* real length is based on 'len' above */
+};
+
+struct qc988xxEepromRateTbl {
+	/* Keep opaque, not sure this can be made public. */
+	__le32 data[99];
+};
+
+#define RATEPWR_TABLE_OPS_SET 0
+#define RATEPWR_TABLE_OPS_GET 1
+#define RATEPWR_TABLE_OPS_GET_CTL 2
+/* For 'get', only the 'op' is paid attention to.  The result comes
+ * back as a WMI message (qc98xxEepromRateTbl, or qca9880_power_ctrl for 'GET_CTL')
+ * For set, send the qc98xxEepromRateTbl in binary form.
+ */
+struct qca9880_pdev_ratepwr_table_cmd {
+	/** operation */
+	__le32 op; /* see GET/SET defines above */
+	/** len of ratepwr table */
+	__le32 ratepwr_len;
+	/** rate power table (len adjusted to number of words) */
+	__le32 ratepwr_tbl[1];
+};
+
 struct wmi_sta_powersave_param_cmd {
 	__le32 vdev_id;
 	__le32 param_id; /* %WMI_STA_PS_PARAM_ */
@@ -6775,6 +6830,8 @@ struct wmi_pdev_set_special_cmd {
 						    * (see 'peers' debugfs for peer id listing)
 						    * val = peer_id << 16 | ant-mask-value
 						    */
+#define SET_SPECIAL_ID_EEPROM_CFG_ADDR_A      0x14 /* Append an address to the configAddr in the eeprom. */
+#define SET_SPECIAL_ID_EEPROM_CFG_ADDR_V      0x15 /* Append an value to the configAddr in the eeprom. */
 
 /* Requires specially compiled firmware (-T option) to have any useful effect. */
 #define SET_SPECIAL_ID_TX_DBG         0x99 /* 0x1 == enable, 0x2 == pkt-dbg, 0x0 == disable (default). */
@@ -7120,6 +7177,8 @@ int ath10k_wmi_op_get_vdev_subtype(struct ath10k *ar,
 				   enum wmi_vdev_subtype subtype);
 int ath10k_wmi_barrier(struct ath10k *ar);
 void ath10k_wmi_stop_scan_work(struct work_struct *work);
+int ath10k_wmi_request_ratepwr_tbl(struct ath10k *ar);
+int ath10k_wmi_request_powerctl_tbl(struct ath10k *ar);
 
 #ifdef CONFIG_ATH10K_DEBUGFS
 /* TODO:  Should really enable this all the time, not just when DEBUGFS is enabled. --Ben */

@@ -1737,7 +1737,25 @@ fallback:
 	}
 
 success:
-	ath10k_dbg(ar, ATH10K_DBG_BOOT, "using board api %d, specified-fild-name: %s\n",
+	/* Store configAddr overloads to apply after firmware boots.  OTP will likely
+	 * overwrite them and so they would otherwise be lost.
+	 */
+	if (ar->dev_id == QCA988X_2_0_DEVICE_ID) {
+		int addrs = 24;
+		int i;
+		u32 *e32 = (u32*)(ar->normal_mode_fw.board_data);
+		int offset = (ar->hw_params.cal_data_len - (addrs * 4)) / 4; /* Start of configAddr */
+		/*ath10k_dbg(ar, ATH10K_DBG_BOOT, "Check saving eeprom configAddr from board-data\n");*/
+		for (i = 0; i<addrs; i++) {
+			ar->eeprom_configAddrs[i] = e32[offset + i];
+			if (ar->eeprom_configAddrs[i]) {
+				ath10k_dbg(ar, ATH10K_DBG_BOOT, "saving eeprom configAddr[%i]: 0x%08x\n",
+					   i, ar->eeprom_configAddrs[i]);
+			}
+		}
+	}
+
+	ath10k_dbg(ar, ATH10K_DBG_BOOT, "using board api %d, specified-file-name: %s\n",
 		   ar->bd_api, ar->fwcfg.bname[0] ? ar->fwcfg.bname : "NA");
 	return 0;
 }
@@ -3267,6 +3285,7 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		/* Don't worry about failures..not much we can do, and not worth failing init even
 		 * if this fails.
 		 */
+
 		for (band = 0; band < 2; band++) {
 			u32 val;
 			for (i = 0; i<MIN_CCA_PWR_COUNT; i++) {
@@ -3363,6 +3382,21 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		if (ar->eeprom_overrides.rc_txbf_probe)
 			ath10k_wmi_pdev_set_fwtest(ar, 20,
 						   ar->eeprom_overrides.rc_txbf_probe);
+
+		for (i = 0; i<ARRAY_SIZE(ar->eeprom_configAddrs); i += 2) {
+			if (ar->eeprom_configAddrs[i]) {
+				ath10k_dbg(ar, ATH10K_DBG_BOOT, "Applying eeprom configAddr[%i]: 0x%08x 0x%08x\n",
+					   i, ar->eeprom_configAddrs[i], ar->eeprom_configAddrs[i+1]);
+
+				ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_EEPROM_CFG_ADDR_A,
+							    ar->eeprom_configAddrs[i]);
+				ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_EEPROM_CFG_ADDR_V,
+							    ar->eeprom_configAddrs[i+1]);
+			}
+			else {
+				break;
+			}
+		}
 	}
 
 	return 0;

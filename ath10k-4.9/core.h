@@ -159,6 +159,10 @@ struct ath10k_wmi {
 	u32 num_mem_chunks;
 	u32 rx_decap_mode;
 	struct ath10k_mem_chunk mem_chunks[WMI_MAX_MEM_REQS];
+
+	int gen_buf_len; /* so far */
+	u8 gen_buffer[2048]; /* Not clear what is true max size */
+	struct wmi_generic_buffer_event last_generic_event;
 };
 
 struct ath10k_fw_stats_peer {
@@ -550,6 +554,14 @@ struct ath10k_debug {
 	u64 tx_noack_bytes;
 	u64 tx_discard_bytes;
 	u64 tx_bytes; /* counter, total sent to firmware */
+
+	int ratepwr_tbl_len;
+	struct qc988xxEepromRateTbl ratepwr_tbl;
+	struct completion ratepwr_tbl_complete;
+
+	int powerctl_tbl_len;
+	struct qca9880_power_ctrl powerctl_tbl;
+	struct completion powerctl_tbl_complete;
 };
 
 enum ath10k_state {
@@ -1162,6 +1174,8 @@ struct ath10k {
 	} spectral;
 #endif
 	u32 wmi_get_temp_count;
+
+	u32 eeprom_configAddrs[24]; /* Store sticky eeprom register settings to re-apply after OTP */
 
 	struct {
 		/* protected by conf_mutex */

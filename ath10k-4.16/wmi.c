@@ -321,7 +321,7 @@ static struct wmi_cmd_map wmi_10x_cmd_map = {
 	.gpio_config_cmdid = WMI_10X_GPIO_CONFIG_CMDID,
 	.gpio_output_cmdid = WMI_10X_GPIO_OUTPUT_CMDID,
 	.pdev_get_temperature_cmdid = WMI_10X_PDEV_GET_TEMPERATURE_CMDID,
-	.pdev_enable_adaptive_cca_cmdid = WMI_CMD_UNSUPPORTED,
+	.pdev_enable_adaptive_cca_cmdid = WMI_10X_SET_CCA_PARAMS_CMDID, /* CT only */
 	.scan_update_request_cmdid = WMI_CMD_UNSUPPORTED,
 	.vdev_standby_response_cmdid = WMI_CMD_UNSUPPORTED,
 	.vdev_resume_response_cmdid = WMI_CMD_UNSUPPORTED,
@@ -342,9 +342,9 @@ static struct wmi_cmd_map wmi_10x_cmd_map = {
 	.peer_smart_ant_set_train_info_cmdid = WMI_CMD_UNSUPPORTED,
 	.peer_smart_ant_set_node_config_ops_cmdid = WMI_CMD_UNSUPPORTED,
 	.pdev_set_antenna_switch_table_cmdid = WMI_CMD_UNSUPPORTED,
-	.pdev_set_ctl_table_cmdid = WMI_CMD_UNSUPPORTED,
-	.pdev_set_mimogain_table_cmdid = WMI_CMD_UNSUPPORTED,
-	.pdev_ratepwr_table_cmdid = WMI_CMD_UNSUPPORTED,
+	.pdev_set_ctl_table_cmdid = WMI_10X_PDEV_SET_CTL_TABLE_CMDID, /* CT only */
+	.pdev_set_mimogain_table_cmdid = WMI_10X_PDEV_SET_MIMOGAIN_TABLE_CMDID, /* CT only */
+	.pdev_ratepwr_table_cmdid = WMI_10X_PDEV_RATEPWR_TABLE_CMDID, /* CT only */
 	.pdev_ratepwr_chainmsk_table_cmdid = WMI_CMD_UNSUPPORTED,
 	.pdev_fips_cmdid = WMI_CMD_UNSUPPORTED,
 	.tt_set_conf_cmdid = WMI_CMD_UNSUPPORTED,
@@ -5438,6 +5438,90 @@ static int ath10k_wmi_event_temperature(struct ath10k *ar, struct sk_buff *skb)
 	return 0;
 }
 
+
+static void ath10k_wmi_process_generic_buffer(struct ath10k* ar, const struct wmi_generic_buffer_event *ev,
+					      u32 len, u8 *buf)
+{
+	u32 type = __le32_to_cpu(ev->buf_type);
+	switch (type) {
+	case WMI_BUFFER_TYPE_RATEPWR_TABLE:
+#ifdef CONFIG_ATH10K_DEBUGFS
+		if (len > sizeof(ar->debug.ratepwr_tbl)) {
+			ath10k_err(ar, "wmi-generic, len: %u > ratepwr-table length: %d\n",
+				   len, (int)(sizeof(ar->debug.ratepwr_tbl)));
+		}
+		else {
+			memcpy(&ar->debug.ratepwr_tbl, buf, len);
+			ar->debug.ratepwr_tbl_len = len;
+			complete(&ar->debug.ratepwr_tbl_complete);
+		}
+		break;
+#endif
+	case WMI_BUFFER_TYPE_CTL_TABLE:
+#ifdef CONFIG_ATH10K_DEBUGFS
+		if (len > sizeof(ar->debug.powerctl_tbl)) {
+			ath10k_err(ar, "wmi-generic, len: %u > powerctl-table length: %d\n",
+				   len, (int)(sizeof(ar->debug.powerctl_tbl)));
+		}
+		else {
+			memcpy(&ar->debug.powerctl_tbl, buf, len);
+			ar->debug.powerctl_tbl_len = len;
+			complete(&ar->debug.powerctl_tbl_complete);
+		}
+		break;
+#endif
+	default:
+		ath10k_dbg(ar, ATH10K_DBG_WMI,
+			   "wmi generic event type: %d is not currently handled.\n",
+			   type);
+	}
+}
+
+static void ath10k_wmi_generic_buffer_eventid(struct ath10k *ar, struct sk_buff *skb)
+{
+	const struct wmi_generic_buffer_event *ev;
+	u32 len;
+	u32 more_frag;
+
+	ev = (struct wmi_generic_buffer_event *)skb->data;
+
+	if (WARN_ON_ONCE(skb->len < sizeof(*ev)))
+		return;
+
+	len = __le32_to_cpu(ev->buf_len);
+	more_frag = __le32_to_cpu(ev->more_frag);
+
+	ath10k_info(ar, "wmi event generic-buffer, type: %d  frag-id: %d more-frag: %d  buf-len: %d\n",
+		    __le32_to_cpu(ev->buf_type), __le32_to_cpu(ev->frag_id), more_frag, len);
+
+	/* Firmware can send us chunked messages, store them up until we have last message */
+	/* Firmware can also run out of buffers and send us incomplete series, deal with that. */
+	if (ar->wmi.gen_buf_len && ar->wmi.last_generic_event.buf_type != ev->buf_type) {
+		ath10k_info(ar, "wmi event generic-buffer, type: %d  frag-id: %d more-frag: %d  buf-len: %d, cur-len: %d  last-generic-type: %d\n",
+			    __le32_to_cpu(ev->buf_type), __le32_to_cpu(ev->frag_id), more_frag, len,
+			    ar->wmi.gen_buf_len, __le32_to_cpu(ar->wmi.last_generic_event.buf_type));
+		ar->wmi.gen_buf_len = 0; /* Start over, something was weird */
+	}
+
+	if (ar->wmi.gen_buf_len + len > sizeof(ar->wmi.gen_buffer)) {
+		ath10k_info(ar, "wmi event generic-buffer, type: %d  frag-id: %d more-frag: %d  buf-len: %d, cur-len: %d, max-allowed: %d (MESSAGE_TOO_LONG)\n",
+			    __le32_to_cpu(ev->buf_type), __le32_to_cpu(ev->frag_id), more_frag, len,
+			    ar->wmi.gen_buf_len, (int)(sizeof(ar->wmi.gen_buffer)));
+		ar->wmi.gen_buf_len = 0; /* Start over, something was weird */
+	}
+
+	memcpy(ar->wmi.gen_buffer + ar->wmi.gen_buf_len, ev->buf_info, len);
+	ar->wmi.gen_buf_len += len;
+
+	if (!more_frag) {
+		ath10k_wmi_process_generic_buffer(ar, ev, ar->wmi.gen_buf_len, ar->wmi.gen_buffer);
+		ar->wmi.gen_buf_len = 0;
+	}
+	else {
+		memcpy(&ar->wmi.last_generic_event, ev, sizeof(*ev));
+	}
+}
+
 static void ath10k_wmi_event_beacon_tx(struct ath10k *ar, struct sk_buff *skb)
 {
 	struct ath10k_vif *arvif;
@@ -5802,6 +5886,9 @@ static void ath10k_wmi_10_1_op_rx(struct ath10k *ar, struct sk_buff *skb)
 	case WMI_10_1_BEACON_TX_EVENTID: /* Feb 28, 2019 CT firmware supports this */
 		ath10k_wmi_event_beacon_tx(ar, skb);
 		break;
+	case WMI_10_1_GENERIC_BUFFER_EVENTID: /* April 2, 2019 CT firmware supports this */
+		ath10k_wmi_generic_buffer_eventid(ar, skb);
+		break;
 	default:
 		ath10k_warn(ar, "Unknown (10.1) eventid: %d\n", id);
 		break;
@@ -6111,6 +6198,38 @@ int ath10k_wmi_connect(struct ath10k *ar)
 
 	ar->wmi.eid = conn_resp.eid;
 	return 0;
+}
+
+int ath10k_wmi_request_ratepwr_tbl(struct ath10k *ar)
+{
+	struct qca9880_pdev_ratepwr_table_cmd *cmd;
+	struct sk_buff *skb;
+
+	skb = ath10k_wmi_alloc_skb(ar, sizeof(*cmd));
+	if (!skb)
+		return ENOMEM;
+
+	cmd = (struct qca9880_pdev_ratepwr_table_cmd *)skb->data;
+
+	cmd->op = __cpu_to_le32(RATEPWR_TABLE_OPS_GET);
+
+	return ath10k_wmi_cmd_send(ar, skb, ar->wmi.cmd->pdev_ratepwr_table_cmdid);
+}
+
+int ath10k_wmi_request_powerctl_tbl(struct ath10k *ar)
+{
+	struct qca9880_pdev_ratepwr_table_cmd *cmd;
+	struct sk_buff *skb;
+
+	skb = ath10k_wmi_alloc_skb(ar, sizeof(*cmd));
+	if (!skb)
+		return ENOMEM;
+
+	cmd = (struct qca9880_pdev_ratepwr_table_cmd *)skb->data;
+
+	cmd->op = __cpu_to_le32(RATEPWR_TABLE_OPS_GET_CTL); /* CT FW only */
+
+	return ath10k_wmi_cmd_send(ar, skb, ar->wmi.cmd->pdev_ratepwr_table_cmdid);
 }
 
 static struct sk_buff *
@@ -9102,13 +9221,14 @@ static const struct wmi_ops wmi_10_1_ops = {
 	/* .gen_prb_tmpl not implemented */
 	/* .gen_p2p_go_bcn_ie not implemented */
 	/* .gen_adaptive_qcs not implemented */
-	/* .gen_pdev_enable_adaptive_cca not implemented */
 
 	/* Some CT 10.1 firmware supports this.  Non-CT 10.1 firmware will not
 	 * advertise WMI_SERVICE_BSS_CHANNEL_INFO_64, so it will never be called
 	 * in the first place.
 	 */
 	.gen_pdev_bss_chan_info_req = ath10k_wmi_10_2_op_gen_pdev_bss_chan_info,
+	.gen_pdev_get_tpc_config = ath10k_wmi_10_2_4_op_gen_pdev_get_tpc_config,
+	.gen_pdev_enable_adaptive_cca = ath10k_wmi_op_gen_pdev_enable_adaptive_cca, /* CT only for wave-1 */
 };
 
 static const struct wmi_ops wmi_10_2_ops = {
