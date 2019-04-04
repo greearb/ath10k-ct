@@ -5750,12 +5750,21 @@ struct wmi_generic_buffer_event {
 	__le32 buf_info[0];
 };
 
-/* Used by: WMI_PDEV_SET_CTL_TABLE_CMDID */
+/* This is returned when reading the CTL table */
 struct qca9880_power_ctrl {
 	/* Not sure this can be made public knowledge, so leaving opaque
 	 * for now. --Ben
 	 */
 	u8 data[72 + 72 + 144 + 144];
+};
+
+/* Used by: WMI_PDEV_SET_CTL_TABLE_CMDID */
+struct qca9880_set_ctl_table_cmd {
+	/** len of CTL info */
+	__le32 ctl_len; /* in bytes.  This may be ignored in firmware,
+			 * make sure ctl_info data is sizeof(qca9880_power_ctl) */
+	/** ctl array (len adjusted to  number of words) */
+	__le32 ctl_info[1]; /* data would be the qca9880_power_ctl table above */
 };
 
 /* Used by:   WMI_PDEV_SET_MIMOGAIN_TABLE_CMDID */
@@ -7179,6 +7188,8 @@ int ath10k_wmi_barrier(struct ath10k *ar);
 void ath10k_wmi_stop_scan_work(struct work_struct *work);
 int ath10k_wmi_request_ratepwr_tbl(struct ath10k *ar);
 int ath10k_wmi_request_powerctl_tbl(struct ath10k *ar);
+int ath10k_wmi_set_power_ctrl_tbl(struct ath10k *ar, int len, u8 *data);
+int ath10k_wmi_check_apply_board_power_ctl_table(struct ath10k *ar);
 
 #ifdef CONFIG_ATH10K_DEBUGFS
 /* TODO:  Should really enable this all the time, not just when DEBUGFS is enabled. --Ben */

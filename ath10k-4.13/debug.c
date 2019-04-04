@@ -3622,6 +3622,17 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 					  ar->eeprom_overrides.rc_txbf_probe);
 		goto unlock;
 	}
+	else if (id == 0x1005) {
+		/* Over-write power-ctl table with what was ready in from the board data */
+		/* Use with care! */
+		ar->eeprom_overrides.apply_board_power_ctl_table = val;
+
+		ath10k_warn(ar, "Setting overwrite power-ctl table with calibration-file data to: %d\n",
+			    ar->eeprom_overrides.apply_board_power_ctl_table);
+
+		ath10k_wmi_check_apply_board_power_ctl_table(ar);
+		goto unlock;
+	}
 	/* else, pass it through to firmware...but will not be stored locally, so
 	 * won't survive through firmware reboots, etc.
 	 */
@@ -3684,6 +3695,7 @@ static ssize_t ath10k_read_ct_special(struct file *file,
 		"id: 0x1002 set su-sounding-timer-ms (0 means use defaults next FW reload.  Default is 100, max is 500)\n"
 		"id: 0x1003 set mu-sounding-timer-ms (0 means use defaults next FW reload.  Default is 40)\n"
 		"id: 0x1004 set rc-txbf-probe (1 means sent txbf probe, 0 (default) means do not\n"
+		"id: 0x1005 set apply-board-power-ctl-table (1 means apply, 0 means not)\n"
 		"\n";
 
 	return simple_read_from_buffer(user_buf, count, ppos, buf, strlen(buf));

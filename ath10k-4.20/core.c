@@ -1740,7 +1740,7 @@ success:
 	/* Store configAddr overloads to apply after firmware boots.  OTP will likely
 	 * overwrite them and so they would otherwise be lost.
 	 */
-	if (ar->dev_id == QCA988X_2_0_DEVICE_ID) {
+	if (ar->hw_params.id == QCA988X_HW_2_0_VERSION) {
 		int addrs = 24;
 		int i;
 		u32 *e32 = (u32*)(ar->normal_mode_fw.board_data);
@@ -3397,6 +3397,9 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 				break;
 			}
 		}
+
+		if (ar->eeprom_overrides.apply_board_power_ctl_table)
+			ath10k_wmi_check_apply_board_power_ctl_table(ar);
 	}
 
 	return 0;

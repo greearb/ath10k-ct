@@ -6798,6 +6798,59 @@ int ath10k_wmi_request_powerctl_tbl(struct ath10k *ar)
 	return ath10k_wmi_cmd_send(ar, skb, ar->wmi.cmd->pdev_ratepwr_table_cmdid);
 }
 
+/* This is for 988x wave-1 firmware.  Probably wave-2 is different WMI API */
+int ath10k_wmi_set_power_ctrl_tbl(struct ath10k *ar, int len, u8* data)
+{
+	struct qca9880_set_ctl_table_cmd *cmd;
+	struct sk_buff *skb;
+
+	if (len != sizeof(struct qca9880_power_ctrl))
+		return EINVAL;
+
+	skb = ath10k_wmi_alloc_skb(ar, 4 + sizeof(struct qca9880_power_ctrl));
+	if (!skb)
+		return ENOMEM;
+
+	cmd = (struct qca9880_set_ctl_table_cmd *)skb->data;
+
+	cmd->ctl_len = __cpu_to_le32(len);
+	memcpy(cmd->ctl_info, data, len);
+
+	return ath10k_wmi_cmd_send(ar, skb, ar->wmi.cmd->pdev_set_ctl_table_cmdid);
+}
+
+int ath10k_wmi_check_apply_board_power_ctl_table(struct ath10k *ar)
+{
+	if (ar->eeprom_overrides.apply_board_power_ctl_table) {
+		if (ar->hw_params.id == QCA988X_HW_2_0_VERSION) {
+			int offset2g = 806;
+			int offset5g = 1572;
+			int len;
+			u8* buf;
+			int ret;
+
+			len = sizeof(struct qca9880_power_ctrl);
+			buf = kmalloc(len, GFP_KERNEL);
+			memcpy(buf, ((u8*)(ar->normal_mode_fw.board_data)) + offset2g, 72 + 72);
+			memcpy(buf + 72 + 72, ((u8*)(ar->normal_mode_fw.board_data)) + offset5g, 144 + 144);
+			if (WARN_ON(len != (72 + 72 + 144 + 144)))
+				return EINVAL;
+			ret = ath10k_wmi_set_power_ctrl_tbl(ar, len, buf);
+			if (ret != 0) {
+				ath10k_warn(ar, "Failed to set power ctrl table, len: %d rv: %d\n",
+					    len, ret);
+			}
+			return ret;
+		}
+		else {
+			ath10k_info(ar, "board_power_ctl_table override not supported for board-id: %d\n",
+				    ar->hw_params.id);
+			return EINVAL;
+		}
+	}
+	return 0;
+}
+
 static struct sk_buff *
 ath10k_wmi_op_gen_pdev_set_rd(struct ath10k *ar, u16 rd, u16 rd2g, u16 rd5g,
 			      u16 ctl2g, u16 ctl5g,
