@@ -5168,7 +5168,13 @@ struct wmi_vdev_install_key_cmd {
 	__le32 key_idx;
 	__le32 key_flags;
 	__le32 key_cipher; /* %WMI_CIPHER_ */
-	struct wmi_key_seq_counter key_rsc_counter;
+	struct wmi_key_seq_counter key_rsc_counter; /* ignored unless WAPI by (most?) stock FW.  CT
+						     * firmware will set PN to this value if high bit of high
+						     * value is set to 0x1 (PN is 48-bits, so the actual PN set
+						     * will be just the lower 48 bits.
+						     * Wave-2 firmware only at this point, April 8 2019
+						     * build and later.
+						     */
 	struct wmi_key_seq_counter key_global_rsc_counter;
 	struct wmi_key_seq_counter key_tsc_counter;
 	u8 wpi_key_rsc_counter[16];

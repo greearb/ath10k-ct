@@ -3066,6 +3066,14 @@ ath10k_wmi_10_4_pull_peer_stats(const struct wmi_10_4_peer_stats *src,
 	dst->peer_rssi = __le32_to_cpu(src->peer_rssi);
 	dst->peer_tx_rate = __le32_to_cpu(src->peer_tx_rate);
 	dst->peer_rx_rate = __le32_to_cpu(src->peer_rx_rate);
+	/* Firmware stores these internally as 16 bits.  CT firmware may pack
+	 * peer's TX PN into top 16 bits if the user has previously set the
+	 * PN when setting a key.
+	 */
+	dst->pn = __le32_to_cpu(src->num_pkt_loss_overflow[2]) >> 16;
+	dst->pn <<= 32;
+	dst->pn |= (__le32_to_cpu(src->num_pkt_loss_overflow[1]) & 0xFFFF0000);
+	dst->pn |= __le32_to_cpu(src->num_pkt_loss_overflow[0]) >> 16;
 }
 
 static void
@@ -9091,6 +9099,8 @@ ath10k_wmi_fw_peer_stats_fill(const struct ath10k_fw_stats_peer *peer,
 			"Peer RX rate", peer->peer_rx_rate);
 	len += scnprintf(buf + len, buf_len - len, "%30s %u\n",
 			"Peer RX duration", peer->rx_duration);
+	len += scnprintf(buf + len, buf_len - len, "%30s %llu\n",
+			 "Peer PN", peer->pn);
 
 	len += scnprintf(buf + len, buf_len - len, "\n");
 	*length = len;
