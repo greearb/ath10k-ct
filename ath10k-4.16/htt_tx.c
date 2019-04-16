@@ -1146,74 +1146,6 @@ err:
 	return res;
 }
 
-/* Create a rate-info object that (some) 10.4 CT firmware
- * can understand.
- */
-u32 ath10k_convert_hw_rate_to_rate_info(u8 tpc, u8 mcs, u8 nss, u8 pream_type,
-					u8 num_retries, u8 bw, u8 dyn_bw)
-{
-
-	/* Re-use logic from 10.4 firmware */
-	struct __ath10k_rate_info {
-		u32     power              : 8,   /* units of the power field is dbm */
-			mcs                : 4,    /* mcs = 0 ~ 9 */
-			nss                : 2,    /* 0 = 1 nss, 1 = 2 nss, 2 = 3 nss, 3 = 4 nss */
-			pream_type         : 2,    /* 0 = WIFI_RATECODE_PREAM_OFDM,
-						      1 = WIFI_RATECODE_PREAM_CCK,
-						      2 = WIFI_RATECODE_PREAM_HT ,
-						      3 = WIFI_RATECODE_PREAM_VHT */
-			num_retries        : 4,    /* 0 ~ 15:  0 means no-ack */
-			dyn_bw             : 1,    /* 0 = static bw, 1 = dynamic bw */
-			bw                 : 3,    /* valid only if dyn_bw == 0 (static bw).
-						      (0 = 20 mhz, 1 = 40 mhz, 2 = 80 mhz, 3 = 160 mhz , 4 = 80+80mhz) */
-			valid_power        : 1,   /*  power info field has valid power. */
-			valid_rate         : 1,    /*  mcs,nss,pream_type fields have valid rates. */
-			valid_num_retries  : 1,    /*  num_retries field has valid value */
-			valid_dyn_bw       : 1,    /*  dyn_bw field has valid value */
-			valid_bw           : 1,    /*   bw field has valid value */
-
-			any_valid          : 1,    /* 1 : htt_tx_msdu_desc_t contains valid tx meta data */
-			key_id             : 2;    /* key index 0 to 3 for per packet key rotation */
-	};
-
-	struct __ath10k_rate_info ri;
-	u32 *rvi = (u32*)(&ri);
-	rvi[0] = 0;
-
-	if (tpc != 0xFF) {
-		ri.power = tpc;
-		ri.valid_power = 1;
-		ri.any_valid = 1;
-	}
-
-	if (mcs != 0xFF) {
-		ri.mcs = mcs;
-		ri.nss = nss;
-		ri.pream_type = pream_type;
-		ri.valid_rate = 1;
-		ri.any_valid = 1;
-	}
-
-	if (num_retries != 0xFF) {
-		ri.num_retries = num_retries;
-		ri.valid_num_retries = 1;
-		ri.any_valid = 1;
-	}
-
-	if (dyn_bw != 0xFF) {
-		ri.dyn_bw = dyn_bw;
-		ri.valid_dyn_bw = 1;
-		if (ri.dyn_bw == 0) {
-			ri.bw = bw;
-			ri.valid_bw = 1;
-		}
-		ri.any_valid = 1;
-	}
-
-	/* leave key-id set to zero for now */
-	return rvi[0];
-}
-
 static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 			    struct ieee80211_vif *vif,
 			    enum ath10k_hw_txrx_mode txmode,
@@ -1274,6 +1206,7 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 			enum nl80211_band band = info->band;
 			const struct ieee80211_supported_band *sband;
 			u8 tpc = 0xFF; /* don't need to set this */
+			u8 sgi = 0;
 			u8 mcs = 0;
 			u8 nss = 0;
 			u8 pream_type;
@@ -1307,6 +1240,7 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 			    (!(ieee80211_is_qos_nullfunc(fc) || ieee80211_is_nullfunc(fc)))) {
 				if (arvif && arvif->txo_active) {
 					tpc = arvif->txo_tpc;
+					sgi = arvif->txo_sgi;
 					mcs = arvif->txo_mcs;
 					nss = arvif->txo_nss;
 					pream_type = arvif->txo_pream;
@@ -1352,11 +1286,11 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 				}
 
 				/* wave-2 supports this API */
-				peer_id = ath10k_convert_hw_rate_to_rate_info(tpc, mcs, nss, pream_type, num_retries, bw, dyn_bw);
+				peer_id = ath10k_convert_hw_rate_to_rate_info(tpc, mcs, sgi, nss, pream_type, num_retries, bw, dyn_bw);
 
 				if (ar->eeprom_overrides.tx_debug & 0x3)
-					ath10k_warn(ar, "wave-2 vdev-id: %d msdu: %p peer_id: 0x%x  tpc: %d mcs: %d nss: %d pream_type: %d num_retries: %d bw: %d dyn_bw: %d\n",
-						    (int)(vdev_id), msdu, peer_id, tpc, mcs, nss, pream_type, num_retries, bw, dyn_bw);
+					ath10k_warn(ar, "wave-2 vdev-id: %d msdu: %p peer_id: 0x%x  tpc: %d sgi: %d mcs: %d nss: %d pream_type: %d num_retries: %d bw: %d dyn_bw: %d\n",
+						    (int)(vdev_id), msdu, peer_id, tpc, sgi, mcs, nss, pream_type, num_retries, bw, dyn_bw);
 			}
 		}
 	}

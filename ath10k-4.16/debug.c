@@ -56,7 +56,7 @@ EXPORT_SYMBOL(ath10k_info);
 void ath10k_debug_print_hwfw_info(struct ath10k *ar)
 {
 	const struct firmware *firmware;
-	char fw_features[256] = {};
+	char fw_features[360] = {};
 	u32 crc = 0;
 
 	ath10k_core_get_fw_features_str(ar, fw_features, sizeof(fw_features));
@@ -1488,10 +1488,10 @@ static ssize_t ath10k_read_set_rate_override(struct file *file,
 		"Only wave-2 CT firmware has full support.  Wave-1 CT firmware has at least\n"
 		"some support (rix mostly).  Wave-2 does not use rix.\n"
 		"To set a value, you specify the dev-name and key-value pairs:\n"
-		"tpc=10 mcs=x nss=x pream=x retries=x dynbw=0|1 bw=x rix=x enable=0|1\n"
+		"tpc=10 sgi=1 mcs=x nss=x pream=x retries=x dynbw=0|1 bw=x rix=x enable=0|1\n"
 		"pream: 0=ofdm, 1=cck, 2=HT, 3=VHT\n"
 		"tpc is in 1db increments, 255 means use defaults, bw is 0-3 for 20-160\n"
-		" For example, wlan0:  echo \"wlan0 tpc=255 mcs=0 nss=1 pream=3 retries=1 dynbw=0 bw=0 active=1\" > ...ath10k/set_rate_override\n";
+		" For example, wlan0:  echo \"wlan0 tpc=255 sgi=1 mcs=0 nss=1 pream=3 retries=1 dynbw=0 bw=0 active=1\" > ...ath10k/set_rate_override\n";
 
 	buf2 = kzalloc(size, GFP_KERNEL);
 	if (buf2 == NULL)
@@ -1507,9 +1507,9 @@ static ssize_t ath10k_read_set_rate_override(struct file *file,
 			continue;
 
 		sofar += scnprintf(buf2 + sofar, size - sofar,
-				   "vdev %i(%s) active=%d tpc=%d mcs=%d nss=%d pream=%d retries=%d dynbw=%d bw=%d rix=%d\n",
+				   "vdev %i(%s) active=%d tpc=%d sgi=%d mcs=%d nss=%d pream=%d retries=%d dynbw=%d bw=%d rix=%d\n",
 				   arvif->vdev_id, wdev->netdev->name,
-				   arvif->txo_active, arvif->txo_tpc, arvif->txo_mcs,
+				   arvif->txo_active, arvif->txo_tpc, arvif->txo_sgi, arvif->txo_mcs,
 				   arvif->txo_nss, arvif->txo_pream, arvif->txo_retries, arvif->txo_dynbw,
 				   arvif->txo_bw, arvif->txo_rix);
 		if (sofar >= size)
@@ -1599,6 +1599,7 @@ static ssize_t ath10k_write_set_rate_override(struct file *file,
 	}
 
 	ATH10K_PARSE_LTOK(tpc);
+	ATH10K_PARSE_LTOK(sgi);
 	ATH10K_PARSE_LTOK(mcs);
 	ATH10K_PARSE_LTOK(nss);
 	ATH10K_PARSE_LTOK(pream);
@@ -1608,9 +1609,9 @@ static ssize_t ath10k_write_set_rate_override(struct file *file,
 	ATH10K_PARSE_LTOK(rix);
 	ATH10K_PARSE_LTOK(active);
 
-	ath10k_warn(ar, "set-rate-overrides, vdev %i(%s) active=%d tpc=%d mcs=%d nss=%d pream=%d retries=%d dynbw=%d bw=%d rix=%d\n",
+	ath10k_warn(ar, "set-rate-overrides, vdev %i(%s) active=%d tpc=%d sgi=%d mcs=%d nss=%d pream=%d retries=%d dynbw=%d bw=%d rix=%d\n",
 		    arvif->vdev_id, dev_name_match,
-		    arvif->txo_active, arvif->txo_tpc, arvif->txo_mcs,
+		    arvif->txo_active, arvif->txo_tpc, arvif->txo_sgi, arvif->txo_mcs,
 		    arvif->txo_nss, arvif->txo_pream, arvif->txo_retries, arvif->txo_dynbw,
 		    arvif->txo_bw, arvif->txo_rix);
 

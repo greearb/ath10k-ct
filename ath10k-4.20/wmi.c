@@ -8575,6 +8575,7 @@ ath10k_wmi_op_gen_beacon_dma(struct ath10k *ar, u32 vdev_id, const void *bcn,
 	struct wmi_bcn_tx_ref_cmd *cmd;
 	struct sk_buff *skb;
 	struct ieee80211_hdr *hdr;
+	u32 ppdu_info = 0;
 	u16 fc;
 
 	skb = ath10k_wmi_alloc_skb(ar, sizeof(*cmd));
@@ -8584,9 +8585,33 @@ ath10k_wmi_op_gen_beacon_dma(struct ath10k *ar, u32 vdev_id, const void *bcn,
 	hdr = (struct ieee80211_hdr *)bcn;
 	fc = le16_to_cpu(hdr->frame_control);
 
+	if (test_bit(ATH10K_FW_FEATURE_HAS_BCN_RC_CT,
+		     ar->running_fw->fw_file.fw_features)) {
+#if 0
+		/* Left as an exercise to the user:  If you want to TX beacons at different
+		 * rates, power, etc.  Then adjust these variables below accordingly.
+		 * --Ben
+		 */
+		u8 tpc = 0xFF; /* ff means don't set */
+		u8 sgi = 0;
+		u8 mcs = 3; // 6Mbps (if ofdm)
+		u8 nss = 0;
+		u8 pream_type = 0; /* ofdm */
+		u8 num_retries = 0; /* no ack */
+		u8 dyn_bw = 0;
+		u8 bw = 0;
+
+		tpc = 1; /* BEN:  Not sure this currently has an effect. */
+		pream_type = 2; /* HT */
+		mcs = 4; /* 54Mbps, if ofdm, 39Mbps if HT, for test purposes */
+
+		ppdu_info = ath10k_convert_hw_rate_to_rate_info(tpc, mcs, sgi, nss, pream_type, num_retries, bw, dyn_bw);
+#endif
+	}
+
 	cmd = (struct wmi_bcn_tx_ref_cmd *)skb->data;
-	cmd->vdev_id = __cpu_to_le32(vdev_id);
-	cmd->data_len = __cpu_to_le32(bcn_len);
+	cmd->vdev_id = __cpu_to_le32(vdev_id | (ppdu_info << 8));
+	cmd->data_len = __cpu_to_le32(bcn_len | (ppdu_info & 0xFF000000));
 	cmd->data_ptr = __cpu_to_le32(bcn_paddr);
 	cmd->msdu_id = 0;
 	cmd->frame_control = __cpu_to_le32(fc);

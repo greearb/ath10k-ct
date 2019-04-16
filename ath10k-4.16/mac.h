@@ -80,6 +80,8 @@ u8 ath10k_mac_hw_rate_to_idx(const struct ieee80211_supported_band *sband,
 			     u8 hw_rate, bool cck);
 u8 ath10k_mac_bitrate_to_idx(const struct ieee80211_supported_band *sband,
 			     u32 bitrate);
+u32 ath10k_convert_hw_rate_to_rate_info(u8 tpc, u8 mcs, u8 sgi, u8 nss, u8 pream_type,
+					u8 num_retries, u8 bw, u8 dyn_bw);
 
 void ath10k_mac_tx_lock(struct ath10k *ar, int reason);
 void ath10k_mac_tx_unlock(struct ath10k *ar, int reason);

@@ -625,6 +625,7 @@ static const char *const ath10k_core_fw_feature_str[] = {
 	[ATH10K_FW_FEATURE_TXRATE2_CT] = "txrate2-CT",
 	[ATH10K_FW_FEATURE_BEACON_TX_CB_CT] = "beacon-cb-CT",
 	[ATH10K_FW_FEATURE_CONSUME_BLOCK_ACK_CT] = "wmi-block-ack-CT",
+	[ATH10K_FW_FEATURE_HAS_BCN_RC_CT] = "wmi-bcn-rc-CT",
 };
 
 static unsigned int ath10k_core_get_fw_feature_str(char *buf,

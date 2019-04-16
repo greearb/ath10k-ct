@@ -157,6 +157,77 @@ u8 ath10k_mac_bitrate_to_idx(const struct ieee80211_supported_band *sband,
 	return 0;
 }
 
+/* Create a rate-info object that (some) 10.4 CT firmware
+ * can understand.
+ */
+u32 ath10k_convert_hw_rate_to_rate_info(u8 tpc, u8 mcs, u8 sgi, u8 nss, u8 pream_type,
+					u8 num_retries, u8 bw, u8 dyn_bw)
+{
+
+	/* Re-use logic from 10.4 firmware */
+	struct __ath10k_rate_info {
+		u32     power              : 6,   /* units of the power field is dbm */
+			unused             : 1,   /* Room for growth */
+			sgi                : 1,   /* Enable SGI or not, checked when valid_rate is enabled. */
+			mcs                : 4,    /* mcs = 0 ~ 9 */
+			nss                : 2,    /* 0 = 1 nss, 1 = 2 nss, 2 = 3 nss, 3 = 4 nss */
+			pream_type         : 2,    /* 0 = WIFI_RATECODE_PREAM_OFDM,
+						      1 = WIFI_RATECODE_PREAM_CCK,
+						      2 = WIFI_RATECODE_PREAM_HT ,
+						      3 = WIFI_RATECODE_PREAM_VHT */
+			num_retries        : 4,    /* 0 ~ 15:  0 means no-ack */
+			dyn_bw             : 1,    /* 0 = static bw, 1 = dynamic bw */
+			bw                 : 3,    /* valid only if dyn_bw == 0 (static bw).
+						      (0 = 20 mhz, 1 = 40 mhz, 2 = 80 mhz, 3 = 160 mhz , 4 = 80+80mhz) */
+			valid_power        : 1,   /*  power info field has valid power. */
+			valid_rate         : 1,    /*  mcs,nss,pream_type fields have valid rates. */
+			valid_num_retries  : 1,    /*  num_retries field has valid value */
+			valid_dyn_bw       : 1,    /*  dyn_bw field has valid value */
+			valid_bw           : 1,    /*   bw field has valid value */
+
+			any_valid          : 1,    /* 1 : htt_tx_msdu_desc_t contains valid tx meta data */
+			key_id             : 2;    /* key index 0 to 3 for per packet key rotation */
+	};
+
+	struct __ath10k_rate_info ri;
+	u32 *rvi = (u32*)(&ri);
+	rvi[0] = 0;
+
+	if (tpc != 0xFF) {
+		ri.power = tpc;
+		ri.valid_power = 1;
+		ri.any_valid = 1;
+	}
+
+	if (mcs != 0xFF) {
+		ri.mcs = mcs;
+		ri.nss = nss;
+		ri.pream_type = pream_type;
+		ri.sgi = sgi;
+		ri.valid_rate = 1;
+		ri.any_valid = 1;
+	}
+
+	if (num_retries != 0xFF) {
+		ri.num_retries = num_retries;
+		ri.valid_num_retries = 1;
+		ri.any_valid = 1;
+	}
+
+	if (dyn_bw != 0xFF) {
+		ri.dyn_bw = dyn_bw;
+		ri.valid_dyn_bw = 1;
+		if (ri.dyn_bw == 0) {
+			ri.bw = bw;
+			ri.valid_bw = 1;
+		}
+		ri.any_valid = 1;
+	}
+
+	/* leave key-id set to zero for now */
+	return rvi[0];
+}
+
 static int ath10k_mac_get_rate_hw_value(int bitrate)
 {
 	int i;

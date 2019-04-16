@@ -967,6 +967,8 @@ enum ath10k_fw_features {
 
 	ATH10K_FW_FEATURE_CONSUME_BLOCK_ACK_CT = 52, /* firmware can accept decrypted rx block-ack over WMI */
 
+	ATH10K_FW_FEATURE_HAS_BCN_RC_CT = 53, /* firmware can accept ppdu (tx-rate) info in beacon-tx-by-ref wmi cmd */
+
 	/* keep last */
 	ATH10K_FW_FEATURE_COUNT,
 };

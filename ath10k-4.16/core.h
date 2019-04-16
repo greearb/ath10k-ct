@@ -488,6 +488,7 @@ struct ath10k_vif {
 	/* TX Rate overrides, CT FW only at this time, and only wave-2 has full support */
 	bool txo_active;
 	u8 txo_tpc;
+	u8 txo_sgi;
 	u8 txo_mcs;
 	u8 txo_nss;
 	u8 txo_pream;
@@ -828,6 +829,8 @@ enum ath10k_fw_features {
 	ATH10K_FW_FEATURE_RESERVED_CT = 51, /* reserved by out-of-tree feature */
 
 	ATH10K_FW_FEATURE_CONSUME_BLOCK_ACK_CT = 52, /* firmware can accept decrypted rx block-ack over WMI */
+
+	ATH10K_FW_FEATURE_HAS_BCN_RC_CT = 53, /* firmware can accept ppdu (tx-rate) info in beacon-tx-by-ref wmi cmd */
 
 	/* keep last */
 	ATH10K_FW_FEATURE_COUNT,
