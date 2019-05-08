@@ -201,6 +201,7 @@ struct ath10k_fw_stats_peer {
 	u32 peer_tx_rate;
 	u32 peer_rx_rate; /* 10x only */
 	u32 rx_duration;
+	u64 pn; /* CT Wave-2 FW Only, special restrictions apply */
 };
 
 struct ath10k_fw_extd_stats_peer {
@@ -1330,6 +1331,7 @@ struct ath10k {
 		bool rx_all_mgt;
 		bool apply_board_power_ctl_table;
 		u8 disable_ibss_cca;
+		u8 peer_stats_pn;
 		u8 rc_txbf_probe;
 #define CT_DISABLE_20MHZ  0x1
 #define CT_DISABLE_40MHZ  0x2

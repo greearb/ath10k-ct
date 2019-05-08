@@ -3401,6 +3401,11 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		/* Not stored in driver, will not be restored upon FW crash/restart */
 		ath10k_warn(ar, "Adding EEPROM configAddr value setting 0x08%x.\n", val);
 	}
+	else if (id == SET_SPECIAL_ID_PEER_STATS_PN) {
+		ar->eeprom_overrides.peer_stats_pn = val;
+		ath10k_warn(ar, "Setting peer-stats-pn to %d\n",
+			    ar->eeprom_overrides.peer_stats_pn);
+	}
 	/* Below here are local driver hacks, and not necessarily passed directly to firmware. */
 	else if (id == 0x1001) {
 		/* Set station failed-transmit kickout threshold. */
@@ -3514,7 +3519,9 @@ static ssize_t ath10k_read_ct_special(struct file *file,
 		"id: 0x11 allow tx-hang logic to try cold resets instead of just warm resets.\n"
 		"id: 0x12 disable special CCA setting for IBSS queues.\n"
 		"id: 0x13 set 5-bit antenna-mask for peer, format:  (peer-id << 16) | ant_mask\n"
-		"id: 0x14 Add a 32-bit sticky register / value override to the eeprom."
+		"id: 0x14 Add a 32-bit sticky register address override to the eeprom."
+		"id: 0x15 Add a 32-bit sticky register value override to the eeprom."
+		"id: 0x16 Enable/Disable reporting PN in peer-stats."
 		"\nBelow here should work with most firmware, including non-CT firmware.\n"
 		"id: 0x1001 set sta-kickout threshold due to tx-failures (0 means disable.  Default is 20 * 16.)\n"
 		"id: 0x1002 set su-sounding-timer-ms (0 means use defaults next FW reload.  Default is 100, max is 500)\n"

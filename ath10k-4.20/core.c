@@ -3370,6 +3370,10 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_DISABLE_IBSS_CCA,
 						    ar->eeprom_overrides.disable_ibss_cca);
 
+		if (ar->eeprom_overrides.peer_stats_pn)
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_PEER_STATS_PN,
+						    ar->eeprom_overrides.peer_stats_pn);
+
 		if (ar->eeprom_overrides.su_sounding_timer_ms)
 			ath10k_wmi_pdev_set_param(ar, ar->wmi.pdev_param->txbf_sound_period_cmdid,
 						  ar->eeprom_overrides.su_sounding_timer_ms);

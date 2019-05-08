@@ -328,6 +328,12 @@ static inline struct sk_buff *ath10k_htt_rx_netbuf_pop(struct ath10k_htt *htt)
 	htt->rx_ring.netbufs_ring[idx] = NULL;
 	ath10k_htt_reset_paddrs_ring(htt, idx);
 
+	if (!msdu->data) {
+		ath10k_err(ar, "htt-rx-netbuf-pop, msdu: %p has null data.  idx: %i  ring-size: %i  fill-count: %i",
+			   msdu, idx, htt->rx_ring.size_mask, htt->rx_ring.fill_cnt);
+		BUG_ON(1);
+	}
+
 	idx++;
 	idx &= htt->rx_ring.size_mask;
 	htt->rx_ring.sw_rd_idx.msdu_payld = idx;

@@ -3112,12 +3112,12 @@ ath10k_wmi_10_4_pull_peer_stats(const struct wmi_10_4_peer_stats *src,
 	dst->peer_rx_rate = __le32_to_cpu(src->peer_rx_rate);
 	/* Firmware stores these internally as 16 bits.  CT firmware may pack
 	 * peer's TX PN into top 16 bits if the user has previously set the
-	 * PN when setting a key.
+	 * PN when setting a key or used the ct-special API to enable reporting PN.
 	 */
-	dst->pn = __le32_to_cpu(src->num_pkt_loss_overflow[2]) >> 16;
+	dst->pn = __le32_to_cpu(src->num_pkt_loss_excess_retry[2]) >> 16;
 	dst->pn <<= 32;
-	dst->pn |= (__le32_to_cpu(src->num_pkt_loss_overflow[1]) & 0xFFFF0000);
-	dst->pn |= __le32_to_cpu(src->num_pkt_loss_overflow[0]) >> 16;
+	dst->pn |= (__le32_to_cpu(src->num_pkt_loss_excess_retry[1]) & 0xFFFF0000);
+	dst->pn |= __le32_to_cpu(src->num_pkt_loss_excess_retry[0]) >> 16;
 }
 
 static void
