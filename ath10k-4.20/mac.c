@@ -4080,6 +4080,9 @@ void ath10k_mac_handle_tx_pause_vdev(struct ath10k *ar, u32 vdev_id,
 	spin_unlock_bh(&ar->htt.tx_lock);
 }
 
+static bool ath10k_tx_h_use_hwcrypto(struct ieee80211_vif *vif,
+				     struct sk_buff *skb);
+
 static enum ath10k_hw_txrx_mode
 ath10k_mac_tx_h_get_txmode(struct ath10k *ar,
 			   struct ieee80211_vif *vif,
@@ -4095,8 +4098,13 @@ ath10k_mac_tx_h_get_txmode(struct ath10k *ar,
 	/* CT Firmware with HTT-TX support sends all frames, including
 	 * management frames, over HTT in NATIVE-WIFI format.
 	 */
-	if (ar->ct_all_pkts_htt)
+	if (ar->ct_all_pkts_htt) {
+		/* If data is protected, but we don't want HW to crypt it, then use raw mode. */
+		if (ieee80211_has_protected(hdr->frame_control) && !(ath10k_tx_h_use_hwcrypto(vif, skb)))
+			return ATH10K_HW_TXRX_RAW;
+
 		goto do_native_mgt_ct;
+	}
 
 	if (ieee80211_is_mgmt(fc))
 		return ATH10K_HW_TXRX_MGMT;
