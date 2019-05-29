@@ -3392,13 +3392,13 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 			if (ar->eeprom_configAddrs[i]) {
 				#define CONFIG_ADDR_MODE_SHIFT 20
 				int mode = (ar->eeprom_configAddrs[i] >> CONFIG_ADDR_MODE_SHIFT) & 0x3;
-				int count = 1; // one setting applied to both 2G and 5G
+				int count = 1; /* one value applied to both 2G and 5G modes */
 				int q;
 
-				if (mode == 2) // 2G, 5G value tuple
+				if (mode == 2) /* 2G, 5G value tuple */
 					count = 2;
-				else if (mode == 3) // 2G_VHT20, 2G_VHT40, 5G_VHT20, 5G_VHT40, 5G_VHT80
-					count = 4;
+				else if (mode == 3) /* 2G_VHT20, 2G_VHT40, 5G_VHT20, 5G_VHT40, 5G_VHT80/160/80+80 */
+					count = 5;
 				ath10k_dbg(ar, ATH10K_DBG_BOOT, "Applying eeprom configAddr[%i]: mode: %d count: %d 0x%08x 0x%08x 0x%08x\n",
 					   i, mode, count, ar->eeprom_configAddrs[i], ar->eeprom_configAddrs[i+1],
 					   (count >= 2) ? ar->eeprom_configAddrs[i+2] : 0);
