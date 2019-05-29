@@ -1748,7 +1748,7 @@ success:
 		int offset = (ar->hw_params.cal_data_len - (addrs * 4)) / 4; /* Start of configAddr */
 		/*ath10k_dbg(ar, ATH10K_DBG_BOOT, "Check saving eeprom configAddr from board-data\n");*/
 		for (i = 0; i<addrs; i++) {
-			ar->eeprom_configAddrs[i] = e32[offset + i];
+			ar->eeprom_configAddrs[i] = le32_to_cpu(e32[offset + i]);
 			if (ar->eeprom_configAddrs[i]) {
 				ath10k_dbg(ar, ATH10K_DBG_BOOT, "saving eeprom configAddr[%i]: 0x%08x\n",
 					   i, ar->eeprom_configAddrs[i]);
