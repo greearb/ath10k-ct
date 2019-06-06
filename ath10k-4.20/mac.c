@@ -4099,10 +4099,20 @@ ath10k_mac_tx_h_get_txmode(struct ath10k *ar,
 	 * management frames, over HTT in NATIVE-WIFI format.
 	 */
 	if (ar->ct_all_pkts_htt) {
-		/* If data is protected, but we don't want HW to crypt it, then use raw mode. */
-		if (ieee80211_has_protected(hdr->frame_control) && !(ath10k_tx_h_use_hwcrypto(vif, skb)))
-			return ATH10K_HW_TXRX_RAW;
+		if (ieee80211_has_protected(hdr->frame_control)) {
+			/* If data is protected, but we don't want HW to crypt it, then use raw mode. */
+			if (!(ath10k_tx_h_use_hwcrypto(vif, skb)))
+				return ATH10K_HW_TXRX_RAW;
 
+			/* If we are PMF/MFP, then packets are evidently not encrypted by the hardware
+			 * unless we are in raw mode.  Go figure.
+			 * Set to raw mode for PMF frames.
+			 */
+			if ((ieee80211_is_action(hdr->frame_control) ||
+			     ieee80211_is_deauth(hdr->frame_control) ||
+			     ieee80211_is_disassoc(hdr->frame_control)))
+				return ATH10K_HW_TXRX_RAW;
+		}
 		goto do_native_mgt_ct;
 	}
 
