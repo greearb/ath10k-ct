@@ -56,7 +56,12 @@
 
 #define ATH10K_INVALID_RSSI 128
 
-#define ATH10K_MAX_NUM_MGMT_PENDING 128
+/* This used to be 128, but klukonin reports increasing this helps in at least
+ * some cases.  I think at worst this could increase mem usage and mgt traffic
+ * latency, but maybe that is worth the tradeoff.  Increasing to 512 per his suggestion.
+ * --Ben
+ */
+#define ATH10K_MAX_NUM_MGMT_PENDING 512
 
 /* number of failed packets (20 packets with 16 sw reties each) */
 #define DEFAULT_ATH10K_KICKOUT_THRESHOLD (20 * 16)

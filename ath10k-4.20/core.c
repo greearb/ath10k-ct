@@ -689,6 +689,12 @@ static int ath10k_init_configure_target(struct ath10k *ar)
 {
 	u32 param_host;
 	int ret;
+	u32 tx_credits = TARGET_HTC_MAX_TX_CREDITS_CT;
+
+	/* at 64 vdevs, the NIC is tight on memory, so only allow 2
+	 * tx-credits in that case. */
+	if (ar->max_num_vdevs > 60)
+		tx_credits = min(tx_credits, (u32)2);
 
 	/* tell target which HTC version it is used*/
 	ret = ath10k_bmi_write32(ar, hi_app_host_interest,
@@ -705,7 +711,7 @@ static int ath10k_init_configure_target(struct ath10k *ar)
 	/* Max tx buffers (tx-credits), CT firmware only.
 	 * but normal .487 firmware will just ignore it fine.
 	 */
-	param_host |= (TARGET_HTC_MAX_TX_CREDITS_CT << 24);
+	param_host |= (tx_credits << 24);
 
 	ret = ath10k_bmi_write32(ar, hi_mbox_io_block_sz,
 				 param_host);

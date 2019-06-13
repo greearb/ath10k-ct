@@ -710,7 +710,7 @@ ath10k_rx_desc_get_l3_pad_bytes(struct ath10k_hw_params *hw,
 /* Only CT firmware will actually use this value.  Each buffer is close to 2K
  * of firmware RAM, so not sure if increasing this is worth the RAM cost.
  */
-#define TARGET_HTC_MAX_TX_CREDITS_CT            2
+#define TARGET_HTC_MAX_TX_CREDITS_CT            4
 
 #define TARGET_10X_NUM_OFFLOAD_PEERS		0
 #define TARGET_10X_NUM_OFFLOAD_REORDER_BUFS	0
