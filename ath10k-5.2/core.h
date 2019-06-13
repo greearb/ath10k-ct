@@ -1337,6 +1337,9 @@ struct ath10k {
 	/* prevents concurrent FW reconfiguration */
 	struct mutex conf_mutex;
 
+	/* protects coredump data */
+	struct mutex dump_mutex;
+
 	/* protects shared structure data */
 	spinlock_t data_lock;
 
@@ -1500,6 +1503,7 @@ struct ath10k {
 		bool rx_all_mgt;
 		bool apply_board_power_ctl_table;
 		u8 disable_ibss_cca;
+		u8 peer_stats_pn;
 		u8 rc_txbf_probe;
 #define CT_DISABLE_20MHZ  0x1
 #define CT_DISABLE_40MHZ  0x2

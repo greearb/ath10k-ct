@@ -1155,6 +1155,44 @@ static u8 ath10k_htt_tx_get_tid(struct sk_buff *skb, bool is_eth)
 		return HTT_DATA_TX_EXT_TID_NON_QOS_MCAST_BCAST;
 }
 
+/* Copied from ieee80211_is_robust_mgmt_frame, but disable the check for has_protected
+ * since we do tx hw crypt, and it won't actually be encrypted even when this flag is
+ * set.
+ */
+bool ieee80211_is_robust_mgmt_frame_tx(struct ieee80211_hdr *hdr)
+{
+        if (ieee80211_is_disassoc(hdr->frame_control) ||
+            ieee80211_is_deauth(hdr->frame_control))
+                return true;
+
+        if (ieee80211_is_action(hdr->frame_control)) {
+                u8 *category;
+
+                /*
+                 * Action frames, excluding Public Action frames, are Robust
+                 * Management Frames. However, if we are looking at a Protected
+                 * frame, skip the check since the data may be encrypted and
+                 * the frame has already been found to be a Robust Management
+                 * Frame (by the other end).
+                 */
+		/*
+		if (ieee80211_has_protected(hdr->frame_control))
+                        return true;
+		*/
+                category = ((u8 *) hdr) + 24;
+                return *category != WLAN_CATEGORY_PUBLIC &&
+                        *category != WLAN_CATEGORY_HT &&
+                        *category != WLAN_CATEGORY_WNM_UNPROTECTED &&
+                        *category != WLAN_CATEGORY_SELF_PROTECTED &&
+                        *category != WLAN_CATEGORY_UNPROT_DMG &&
+                        *category != WLAN_CATEGORY_VHT &&
+                        *category != WLAN_CATEGORY_VENDOR_SPECIFIC;
+        }
+
+        return false;
+}
+
+
 int ath10k_htt_mgmt_tx(struct ath10k_htt *htt, struct sk_buff *msdu)
 {
 	struct ath10k *ar = htt->ar;
@@ -1414,21 +1452,23 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 			/*ath10k_warn(ar, "qos-data: %d data: %d  qos-nullfunc: %d  nullfunc: %d\n",
 				    ieee80211_is_data_qos(fc), ieee80211_is_data(fc),
 				    ieee80211_is_qos_nullfunc(fc), ieee80211_is_nullfunc(fc));*/
-			if ((ieee80211_is_data_qos(fc) || ieee80211_is_data(fc)) &&
+			/* In order to allow ARP to work, don't mess with frames < 100 bytes in length, assume
+			 * test frames are larger.
+			 */
+			if ((msdu->len >= 100) &&
+			    (ieee80211_is_data_qos(fc) || ieee80211_is_data(fc)) &&
 			    (!(ieee80211_is_qos_nullfunc(fc) || ieee80211_is_nullfunc(fc)))) {
-				if (arvif && arvif->txo_active) {
-					tpc = arvif->txo_tpc;
-					sgi = arvif->txo_sgi;
-					mcs = arvif->txo_mcs;
-					nss = arvif->txo_nss;
-					pream_type = arvif->txo_pream;
-					num_retries = arvif->txo_retries;
-					dyn_bw = arvif->txo_dynbw;
-					bw = arvif->txo_bw;
-					rix = arvif->txo_rix;
-					/*ath10k_warn(ar, "gathering txrate info from arvif, tpc: %d mcs: %d nss: %d pream_type: %d num_retries: %d dyn_bw: %d bw: %d rix: %d\n",
-					  tpc, mcs, nss, pream_type, num_retries, dyn_bw, bw, rix);*/
-				}
+				tpc = arvif->txo_tpc;
+				sgi = arvif->txo_sgi;
+				mcs = arvif->txo_mcs;
+				nss = arvif->txo_nss;
+				pream_type = arvif->txo_pream;
+				num_retries = arvif->txo_retries;
+				dyn_bw = arvif->txo_dynbw;
+				bw = arvif->txo_bw;
+				rix = arvif->txo_rix;
+				/*ath10k_warn(ar, "gathering txrate info from arvif, tpc: %d mcs: %d nss: %d pream_type: %d num_retries: %d dyn_bw: %d bw: %d rix: %d\n",
+				  tpc, mcs, nss, pream_type, num_retries, dyn_bw, bw, rix);*/
 			}
 			else {
 				if (!(info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT))
@@ -1492,15 +1532,22 @@ skip_fixed_rate:
 	txbuf_paddr = htt->txbuf.paddr +
 		      (sizeof(struct ath10k_htt_txbuf_32) * msdu_id);
 
-	if ((ieee80211_is_action(hdr->frame_control) ||
-	     ieee80211_is_deauth(hdr->frame_control) ||
-	     ieee80211_is_disassoc(hdr->frame_control)) &&
-	     ieee80211_has_protected(hdr->frame_control)) {
-		skb_put(msdu, IEEE80211_CCMP_MIC_LEN);
-	} else if (!(skb_cb->flags & ATH10K_SKB_F_NO_HWCRYPT) &&
-		   txmode == ATH10K_HW_TXRX_RAW &&
-		   ieee80211_has_protected(hdr->frame_control)) {
-		skb_put(msdu, IEEE80211_CCMP_MIC_LEN);
+	if (ar->eeprom_overrides.tx_debug & 0x3) {
+		ath10k_warn(ar,
+			    "htt tx, is-action: %d  deauth: %d  disassoc: %d  has-protected: %d  nohwcrypt: %d txmode: %d data-qos: %d\n",
+			    ieee80211_is_action(hdr->frame_control), ieee80211_is_deauth(hdr->frame_control),
+			    ieee80211_is_disassoc(hdr->frame_control), ieee80211_has_protected(hdr->frame_control),
+			    skb_cb->flags & ATH10K_SKB_F_NO_HWCRYPT, txmode, ieee80211_is_data_qos(hdr->frame_control));
+	}
+
+	if (!(skb_cb->flags & ATH10K_SKB_F_NO_HWCRYPT)) {
+		if (ieee80211_is_robust_mgmt_frame_tx(hdr) &&
+		    ieee80211_has_protected(hdr->frame_control)) {
+			skb_put(msdu, IEEE80211_CCMP_MIC_LEN);
+		} else if (txmode == ATH10K_HW_TXRX_RAW &&
+			   ieee80211_has_protected(hdr->frame_control)) {
+			skb_put(msdu, IEEE80211_CCMP_MIC_LEN);
+		}
 	}
 
 	/* NOTE:  This writes over info->control.rates[0], at least. */
@@ -1613,19 +1660,26 @@ skip_fixed_rate:
 	skb_len = msdu->len;
 	trace_ath10k_htt_tx(ar, msdu_id, msdu->len, vdev_id, tid);
 
-	if (ar->eeprom_overrides.tx_debug & 0x3)
+	if (ar->eeprom_overrides.tx_debug & 0x3) {
 		ath10k_warn(ar,
 			    "htt tx flags0 %hhu flags1 %hu (noack: %d) len %d id %hu frags_paddr %pad, msdu_paddr %pad vdev %hhu tid %hhu freq %hu\n",
 			    flags0, flags1, (flags1 & HTT_DATA_TX_DESC_FLAGS1_NO_ACK_CT), skb_len, msdu_id, &frags_paddr,
 			    &skb_cb->paddr, vdev_id, tid, freq);
-	else
+		if (ar->eeprom_overrides.tx_debug & 0x10) {
+			ath10k_dbg_dump(ar, ATH10K_DBG_BOOT, NULL, "htt tx msdu: ",
+					msdu->data, skb_len);
+		}
+	}
+	else {
 		ath10k_dbg(ar, ATH10K_DBG_HTT,
 			   "htt tx flags0 %hhu flags1 %hu len %d id %hu frags_paddr %pad, msdu_paddr %pad vdev %hhu tid %hhu freq %hu\n",
 			   flags0, flags1, skb_len, msdu_id, &frags_paddr,
 			   &skb_cb->paddr, vdev_id, tid, freq);
 
-	ath10k_dbg_dump(ar, ATH10K_DBG_HTT_DUMP, NULL, "htt tx msdu: ",
-			msdu->data, skb_len);
+		ath10k_dbg_dump(ar, ATH10K_DBG_HTT_DUMP, NULL, "htt tx msdu: ",
+				msdu->data, skb_len);
+	}
+
 	trace_ath10k_tx_hdr(ar, msdu->data, msdu->len);
 	trace_ath10k_tx_payload(ar, msdu->data, msdu->len);
 

@@ -1119,6 +1119,44 @@ static u8 ath10k_htt_tx_get_tid(struct sk_buff *skb, bool is_eth)
 		return HTT_DATA_TX_EXT_TID_NON_QOS_MCAST_BCAST;
 }
 
+/* Copied from ieee80211_is_robust_mgmt_frame, but disable the check for has_protected
+ * since we do tx hw crypt, and it won't actually be encrypted even when this flag is
+ * set.
+ */
+bool ieee80211_is_robust_mgmt_frame_tx(struct ieee80211_hdr *hdr)
+{
+        if (ieee80211_is_disassoc(hdr->frame_control) ||
+            ieee80211_is_deauth(hdr->frame_control))
+                return true;
+
+        if (ieee80211_is_action(hdr->frame_control)) {
+                u8 *category;
+
+                /*
+                 * Action frames, excluding Public Action frames, are Robust
+                 * Management Frames. However, if we are looking at a Protected
+                 * frame, skip the check since the data may be encrypted and
+                 * the frame has already been found to be a Robust Management
+                 * Frame (by the other end).
+                 */
+		/*
+		if (ieee80211_has_protected(hdr->frame_control))
+                        return true;
+		*/
+                category = ((u8 *) hdr) + 24;
+                return *category != WLAN_CATEGORY_PUBLIC &&
+                        *category != WLAN_CATEGORY_HT &&
+                        *category != WLAN_CATEGORY_WNM_UNPROTECTED &&
+                        *category != WLAN_CATEGORY_SELF_PROTECTED &&
+                        *category != WLAN_CATEGORY_UNPROT_DMG &&
+                        *category != WLAN_CATEGORY_VHT &&
+                        *category != WLAN_CATEGORY_VENDOR_SPECIFIC;
+        }
+
+        return false;
+}
+
+
 int ath10k_htt_mgmt_tx(struct ath10k_htt *htt, struct sk_buff *msdu)
 {
 	struct ath10k *ar = htt->ar;
@@ -1467,9 +1505,7 @@ skip_fixed_rate:
 	}
 
 	if (!(skb_cb->flags & ATH10K_SKB_F_NO_HWCRYPT)) {
-		if ((ieee80211_is_action(hdr->frame_control) ||
-		     ieee80211_is_deauth(hdr->frame_control) ||
-		     ieee80211_is_disassoc(hdr->frame_control)) &&
+		if (ieee80211_is_robust_mgmt_frame_tx(hdr) &&
 		    ieee80211_has_protected(hdr->frame_control)) {
 			skb_put(msdu, IEEE80211_CCMP_MIC_LEN);
 		} else if (txmode == ATH10K_HW_TXRX_RAW &&

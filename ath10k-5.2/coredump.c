@@ -1102,7 +1102,7 @@ struct ath10k_fw_crash_data *ath10k_coredump_new(struct ath10k *ar)
 {
 	struct ath10k_fw_crash_data *crash_data = ar->coredump.fw_crash_data;
 
-	lockdep_assert_held(&ar->data_lock);
+	lockdep_assert_held(&ar->dump_mutex);
 
 	if (ath10k_coredump_mask == 0)
 		/* coredump disabled */
@@ -1163,7 +1163,7 @@ static struct ath10k_dump_file_data *ath10k_coredump_build(struct ath10k *ar)
 	if (!buf)
 		return NULL;
 
-	spin_lock_bh(&ar->data_lock);
+	mutex_lock(&ar->dump_mutex);
 
 	dump_data = (struct ath10k_dump_file_data *)(buf);
 	strlcpy(dump_data->df_magic, "ATH10K-FW-DUMP",
@@ -1290,7 +1290,8 @@ static struct ath10k_dump_file_data *ath10k_coredump_build(struct ath10k *ar)
 
 	WARN_ON(sofar != len);
 
-	spin_unlock_bh(&ar->data_lock);
+
+	mutex_unlock(&ar->dump_mutex);
 
 	return dump_data;
 }

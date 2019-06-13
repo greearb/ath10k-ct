@@ -2100,7 +2100,9 @@ struct wmi_channel {
 	union {
 		__le32 reginfo1;
 		struct {
+			/* note: power unit is 1 dBm */
 			u8 antenna_max;
+			/* note: power unit is 0.5 dBm */
 			u8 max_tx_power;
 		} __packed;
 	} __packed;
@@ -2120,6 +2122,7 @@ struct wmi_channel_arg {
 	u32 min_power;
 	u32 max_power;
 	u32 max_reg_power;
+	/* note: power unit is 1 dBm */
 	u32 max_antenna_gain;
 	u32 reg_class_id;
 	enum wmi_phy_mode mode;
@@ -7349,8 +7352,13 @@ struct wmi_pdev_set_special_cmd {
 						    * (see 'peers' debugfs for peer id listing)
 						    * val = peer_id << 16 | ant-mask-value
 						    */
-#define SET_SPECIAL_ID_EEPROM_CFG_ADDR_A      0x14 /* Append an address to the configAddr in the eeprom. */
-#define SET_SPECIAL_ID_EEPROM_CFG_ADDR_V      0x15 /* Append an value to the configAddr in the eeprom. */
+#define SET_SPECIAL_ID_EEPROM_CFG_ADDR_A      0x14 /* Append an address to the configAddr in the eeprom.
+						    * The mode should normally be OR'd in to the address.
+						    */
+#define SET_SPECIAL_ID_EEPROM_CFG_ADDR_V      0x15 /* Append an value to the configAddr in the eeprom.  Multiple values may
+						    * be appended if the mode supports it.
+						    */
+#define SET_SPECIAL_ID_PEER_STATS_PN          0x16 /* Report PN in peer-stats object */
 
 /* Requires specially compiled firmware (-T option) to have any useful effect. */
 #define SET_SPECIAL_ID_TX_DBG         0x99 /* 0x1 == enable, 0x2 == pkt-dbg, 0x0 == disable (default). */

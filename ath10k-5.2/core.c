@@ -1751,7 +1751,7 @@ success:
 		int offset = (ar->hw_params.cal_data_len - (addrs * 4)) / 4; /* Start of configAddr */
 		/*ath10k_dbg(ar, ATH10K_DBG_BOOT, "Check saving eeprom configAddr from board-data\n");*/
 		for (i = 0; i<addrs; i++) {
-			ar->eeprom_configAddrs[i] = e32[offset + i];
+			ar->eeprom_configAddrs[i] = le32_to_cpu(e32[offset + i]);
 			if (ar->eeprom_configAddrs[i]) {
 				ath10k_dbg(ar, ATH10K_DBG_BOOT, "saving eeprom configAddr[%i]: 0x%08x\n",
 					   i, ar->eeprom_configAddrs[i]);
@@ -3395,6 +3395,10 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_DISABLE_IBSS_CCA,
 						    ar->eeprom_overrides.disable_ibss_cca);
 
+		if (ar->eeprom_overrides.peer_stats_pn)
+			ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_PEER_STATS_PN,
+						    ar->eeprom_overrides.peer_stats_pn);
+
 		if (ar->eeprom_overrides.su_sounding_timer_ms)
 			ath10k_wmi_pdev_set_param(ar, ar->wmi.pdev_param->txbf_sound_period_cmdid,
 						  ar->eeprom_overrides.su_sounding_timer_ms);
@@ -3409,15 +3413,29 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 			ath10k_wmi_pdev_set_fwtest(ar, 20,
 						   ar->eeprom_overrides.rc_txbf_probe);
 
-		for (i = 0; i<ARRAY_SIZE(ar->eeprom_configAddrs); i += 2) {
+		for (i = 0; i<ARRAY_SIZE(ar->eeprom_configAddrs); ) {
 			if (ar->eeprom_configAddrs[i]) {
-				ath10k_dbg(ar, ATH10K_DBG_BOOT, "Applying eeprom configAddr[%i]: 0x%08x 0x%08x\n",
-					   i, ar->eeprom_configAddrs[i], ar->eeprom_configAddrs[i+1]);
+				#define CONFIG_ADDR_MODE_SHIFT 20
+				int mode = (ar->eeprom_configAddrs[i] >> CONFIG_ADDR_MODE_SHIFT) & 0x3;
+				int count = 1; /* one value applied to both 2G and 5G modes */
+				int q;
+
+				if (mode == 2) /* 2G, 5G value tuple */
+					count = 2;
+				else if (mode == 3) /* 2G_VHT20, 2G_VHT40, 5G_VHT20, 5G_VHT40, 5G_VHT80/160/80+80 */
+					count = 5;
+				ath10k_dbg(ar, ATH10K_DBG_BOOT, "Applying eeprom configAddr[%i]: mode: %d count: %d 0x%08x 0x%08x 0x%08x\n",
+					   i, mode, count, ar->eeprom_configAddrs[i], ar->eeprom_configAddrs[i+1],
+					   (count >= 2) ? ar->eeprom_configAddrs[i+2] : 0);
 
 				ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_EEPROM_CFG_ADDR_A,
 							    ar->eeprom_configAddrs[i]);
-				ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_EEPROM_CFG_ADDR_V,
-							    ar->eeprom_configAddrs[i+1]);
+				for (q = 0; q<count; q++) {
+					ath10k_wmi_pdev_set_special(ar, SET_SPECIAL_ID_EEPROM_CFG_ADDR_V,
+								    ar->eeprom_configAddrs[i + q + 1]);
+				}
+
+				i += (count + 1);
 			}
 			else {
 				break;
@@ -3856,6 +3874,7 @@ struct ath10k *ath10k_core_create(size_t priv_size, struct device *dev,
 		goto err_free_wq;
 
 	mutex_init(&ar->conf_mutex);
+	mutex_init(&ar->dump_mutex);
 	spin_lock_init(&ar->data_lock);
 
 	INIT_LIST_HEAD(&ar->peers);
