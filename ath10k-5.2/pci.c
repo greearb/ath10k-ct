@@ -2364,19 +2364,6 @@ static void ath10k_pci_hif_stop(struct ath10k *ar)
 
 	ath10k_dbg(ar, ATH10K_DBG_BOOT, "boot hif stop\n");
 
-	/* Most likely the device has HTT Rx ring configured. The only way to
-	 * prevent the device from accessing (and possible corrupting) host
-	 * memory is to reset the chip now.
-	 *
-	 * There's also no known way of masking MSI interrupts on the device.
-	 * For ranged MSI the CE-related interrupts can be masked. However
-	 * regardless how many MSI interrupts are assigned the first one
-	 * is always used for firmware indications (crashes) and cannot be
-	 * masked. To prevent the device from asserting the interrupt reset it
-	 * before proceeding with cleanup.
-	 */
-	ath10k_pci_safe_chip_reset(ar);
-
 	ath10k_pci_irq_disable(ar);
 	ath10k_pci_irq_sync(ar);
 
@@ -2401,6 +2388,20 @@ static void ath10k_pci_hif_stop(struct ath10k *ar)
 		napi_disable(&ar->napi);
 		ar->napi_enabled = false;
 	}
+
+	/* Most likely the device has HTT Rx ring configured. The only way to
+	 * prevent the device from accessing (and possible corrupting) host
+	 * memory is to reset the chip now.
+	 *
+	 * There's also no known way of masking MSI interrupts on the device.
+	 * For ranged MSI the CE-related interrupts can be masked. However
+	 * regardless how many MSI interrupts are assigned the first one
+	 * is always used for firmware indications (crashes) and cannot be
+	 * masked. To prevent the device from asserting the interrupt reset it
+	 * before proceeding with cleanup.
+	 */
+	ath10k_pci_safe_chip_reset(ar);
+
 	ath10k_pci_flush(ar);
 
 	spin_lock_irqsave(&ar_pci->ps_lock, flags);

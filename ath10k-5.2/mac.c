@@ -156,7 +156,7 @@ u32 ath10k_convert_hw_rate_to_rate_info(u8 tpc, u8 mcs, u8 sgi, u8 nss, u8 pream
 
 	/* Re-use logic from 10.4 firmware */
 	struct __ath10k_rate_info {
-		u32     power              : 6,   /* units of the power field is dbm */
+		u32     power              : 6,   /* units of the power field is 1/2 dbm */
 			unused             : 1,   /* Room for growth */
 			sgi                : 1,   /* Enable SGI or not, checked when valid_rate is enabled. */
 			mcs                : 4,    /* mcs = 0 ~ 9 */
@@ -1845,6 +1845,10 @@ static int ath10k_mac_setup_prb_tmpl(struct ath10k_vif *arvif)
 		return 0;
 
 	if (arvif->vdev_type != WMI_VDEV_TYPE_AP)
+		return 0;
+
+	 /* For mesh, probe response and beacon share the same template */
+	if (ieee80211_vif_is_mesh(vif))
 		return 0;
 
 	prb = ieee80211_proberesp_get(hw, vif);
@@ -6518,8 +6522,8 @@ static void ath10k_bss_info_changed(struct ieee80211_hw *hw,
 	struct cfg80211_chan_def def;
 	u32 vdev_param, pdev_param, slottime, preamble;
 	u16 bitrate, hw_value;
-	u8 rate, basic_rate_idx;
-	int rateidx, ret = 0, hw_rate_code;
+	u8 rate, basic_rate_idx, rateidx;
+	int ret = 0, hw_rate_code, mcast_rate;
 	enum nl80211_band band;
 	const struct ieee80211_supported_band *sband;
 
@@ -6706,7 +6710,11 @@ static void ath10k_bss_info_changed(struct ieee80211_hw *hw,
 	if (changed & BSS_CHANGED_MCAST_RATE &&
 	    !ath10k_mac_vif_chan(arvif->vif, &def)) {
 		band = def.chan->band;
-		rateidx = vif->bss_conf.mcast_rate[band] - 1;
+		mcast_rate = vif->bss_conf.mcast_rate[band];
+		if (mcast_rate > 0)
+			rateidx = mcast_rate - 1;
+		else
+			rateidx = ffs(vif->bss_conf.basic_rates) - 1;
 
 		if (ar->phy_capability & WHAL_WLAN_11A_CAPABILITY)
 			rateidx += ATH10K_MAC_FIRST_OFDM_RATE_IDX;
@@ -9107,6 +9115,15 @@ static void ath10k_sta_statistics(struct ieee80211_hw *hw,
 	sinfo->rx_duration = arsta->rx_duration;
 	sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_DURATION);
 
+	/* CT firmware has it's own per-packet tx status logic, don't bother using
+	 * this peer-stats stuff.
+	 */
+	if ((test_bit(ATH10K_FW_FEATURE_TXRATE_CT,
+		      ar->running_fw->fw_file.fw_features)) ||
+	    (test_bit(ATH10K_FW_FEATURE_TXRATE2_CT,
+		      ar->running_fw->fw_file.fw_features)))
+		return;
+
 	if (!arsta->txrate.legacy && !arsta->txrate.nss)
 		return;
 
@@ -9525,6 +9542,8 @@ ieee80211_iface_combination ath10k_10_4_bcn_int_if_comb[] = {
 		.radar_detect_widths =  BIT(NL80211_CHAN_WIDTH_20_NOHT) |
 					BIT(NL80211_CHAN_WIDTH_20) |
 					BIT(NL80211_CHAN_WIDTH_40) |
+					BIT(NL80211_CHAN_WIDTH_80P80) | /* TODO:  Verify --Ben */
+					BIT(NL80211_CHAN_WIDTH_160) | /* TODO:  Verify --Ben */
 					BIT(NL80211_CHAN_WIDTH_80),
 #endif
 	},

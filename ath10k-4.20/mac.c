@@ -166,7 +166,7 @@ u32 ath10k_convert_hw_rate_to_rate_info(u8 tpc, u8 mcs, u8 sgi, u8 nss, u8 pream
 
 	/* Re-use logic from 10.4 firmware */
 	struct __ath10k_rate_info {
-		u32     power              : 6,   /* units of the power field is dbm */
+		u32     power              : 6,   /* units of the power field is 1/2 dbm */
 			unused             : 1,   /* Room for growth */
 			sgi                : 1,   /* Enable SGI or not, checked when valid_rate is enabled. */
 			mcs                : 4,    /* mcs = 0 ~ 9 */
@@ -9040,6 +9040,15 @@ static void ath10k_sta_statistics(struct ieee80211_hw *hw,
 	sinfo->rx_duration = arsta->rx_duration;
 	sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_DURATION);
 
+	/* CT firmware has it's own per-packet tx status logic, don't bother using
+	 * this peer-stats stuff.
+	 */
+	if ((test_bit(ATH10K_FW_FEATURE_TXRATE_CT,
+		      ar->running_fw->fw_file.fw_features)) ||
+	    (test_bit(ATH10K_FW_FEATURE_TXRATE2_CT,
+		      ar->running_fw->fw_file.fw_features)))
+		return;
+
 	if (!arsta->txrate.legacy && !arsta->txrate.nss)
 		return;
 
@@ -9458,6 +9467,8 @@ ieee80211_iface_combination ath10k_10_4_bcn_int_if_comb[] = {
 		.radar_detect_widths =  BIT(NL80211_CHAN_WIDTH_20_NOHT) |
 					BIT(NL80211_CHAN_WIDTH_20) |
 					BIT(NL80211_CHAN_WIDTH_40) |
+					BIT(NL80211_CHAN_WIDTH_80P80) | /* TODO:  Verify --Ben */
+					BIT(NL80211_CHAN_WIDTH_160) | /* TODO:  Verify --Ben */
 					BIT(NL80211_CHAN_WIDTH_80),
 #endif
 	},
