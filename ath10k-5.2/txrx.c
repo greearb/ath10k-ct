@@ -117,6 +117,8 @@ static void ath10k_set_tx_rate_status(struct ath10k *ar,
 		rate->flags |= IEEE80211_TX_RC_VHT_MCS;
 		/* TODO-BEN:  Not sure this is correct. */
 		rate->idx = (nss << 4) | hw_rate;
+		WARN_ONCE(((hw_rate > 9) || (nss > 3)), "Invalid VHT rate, nss: %d  hw_rate: %d ratecode: %d\n",
+			  nss, hw_rate, tx_done->tx_rate_code);
 	}
 
 	if (tx_done->tx_rate_flags & ATH10K_RC_FLAG_40MHZ)

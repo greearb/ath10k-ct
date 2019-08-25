@@ -909,8 +909,18 @@ ath10k_htt_rx_h_peer_channel(struct ath10k *ar, struct htt_rx_desc *rxd)
 	if (WARN_ON_ONCE(!arvif))
 		return NULL;
 
-	if (WARN_ON_ONCE(ath10k_mac_vif_chan(arvif->vif, &def)))
+	if (ath10k_mac_vif_chan(arvif->vif, &def)) {
+		/* This used to WARN_ON_ONCE, but that bothers users, and I am not sure this is really
+		 * a bug. --Ben
+		 */
+		static bool do_once = 1;
+		if (do_once) {
+			ath10k_warn(ar, "mac-vif-chan had error in htt_rx_h_vdev_channel, peer-id: %d  vdev-id: %d peer-addr: %pM.",
+				    peer_id, peer->vdev_id, peer->addr);
+			do_once = 0;
+		}
 		return NULL;
+	}
 
 	return def.chan;
 }
@@ -3207,7 +3217,7 @@ bool ath10k_htt_t2h_msg_handler(struct ath10k *ar, struct sk_buff *skb)
 		break;
 	}
 	case HTT_T2H_MSG_TYPE_MGMT_TX_COMPLETION: {
-		struct htt_tx_done tx_done = {};
+		struct htt_tx_done tx_done = {0};
 		int status = __le32_to_cpu(resp->mgmt_tx_completion.status);
 		int info = __le32_to_cpu(resp->mgmt_tx_completion.info);
 
