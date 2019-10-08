@@ -525,7 +525,7 @@ void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 		}
 
 		for (i = 0; i < __le16_to_cpu(regdump->count); i++) {
-			u16 id = __le16_to_cpu(regdump->regpair[i].reg_id);
+			u32 id = __le32_to_cpu(regdump->regpair[i].reg_id);
 			switch (id) {
 			case REG_DUMP_NONE:
 				break;
@@ -607,7 +607,7 @@ void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 				int max_supported = DBG_REG_DUMP_COUNT + ARRAY_SIZE(sptr->extra_regs);
 				if (id >= DBG_REG_DUMP_COUNT && id < max_supported) {
 					sptr->extra_regs[id - DBG_REG_DUMP_COUNT] = regdump->regpair[i].reg_val;
-					sptr->extras_count = max(sptr->extras_count, (id - DBG_REG_DUMP_COUNT) + 1);
+					sptr->extras_count = max(sptr->extras_count, (int)(id - DBG_REG_DUMP_COUNT) + 1);
 				}
 				//ath10k_warn(ar, "dbg-regs, max-supported: %d  id: %d  extras-count: %d\n",
 				//	    max_supported, id, sptr->extras_count);

@@ -1710,9 +1710,14 @@ static int ath10k_vdev_start_restart(struct ath10k_vif *arvif,
 
 	ret = ath10k_vdev_setup_sync(ar);
 	if (ret) {
-		ath10k_warn(ar,
-			    "failed to synchronize setup for vdev %i restart %d: %d\n",
+		ath10k_err(ar,
+			    "Failed to synchronize setup for vdev %i restart %d: %d, will restart firmware\n",
 			    arg.vdev_id, restart, ret);
+		/* I see this on a wave-1 NIC when doing lots of station create/delete very fast.
+		 * In my particular case, the keepalive timer is also showing communication errors.
+		 * Reset the NIC by faking a crash, it seems unlikely it will recover. --Ben
+		 */
+		ath10k_hif_fw_crashed_dump(ar);
 		return ret;
 	}
 
