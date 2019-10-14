@@ -2977,6 +2977,10 @@ int ath10k_wmi_event_csi_mesg(struct ath10k *ar, struct sk_buff *skb)
 	__le32 *ibuf;
 	int q = 0;
 	int len;
+
+	u8 *ubuf;
+	u16 ulen;
+	int res = 0;
 	const char* lvl = KERN_INFO;
 
 	ath10k_dbg(ar, ATH10K_DBG_WMI, "wmi event csi mesg len %d\n",
@@ -3007,6 +3011,15 @@ int ath10k_wmi_event_csi_mesg(struct ath10k *ar, struct sk_buff *skb)
 printme:
 	ibuf = (__le32*)(ar->csi_data);
 	len = ar->csi_data_len / 4;
+
+	ubuf = ar->csi_data;
+	ulen = ar->csi_data_len;
+	// CSI over relayFS
+	res = ath10k_csi_process(ar, ubuf, ulen);
+	if (res < 0) {
+		ath10k_dbg(ar, ATH10K_DBG_WMI, "failed to process CSI measurements: %d\n", res);
+		return;
+	}
 
 	/* This is quite noisy, need a better way to get this to user-space. */
 	/* This is the CFR data, channel-frequency-response */

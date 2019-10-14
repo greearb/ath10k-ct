@@ -5781,6 +5781,8 @@ static int ath10k_start(struct ieee80211_hw *hw)
 	ath10k_spectral_start(ar);
 	ath10k_thermal_set_throttling(ar);
 
+	ath10k_csi_start(ar);
+
 	ar->radar_conf_state = ATH10K_RADAR_CONFIRMATION_IDLE;
 
 	mutex_unlock(&ar->conf_mutex);
@@ -6391,6 +6393,11 @@ static void ath10k_remove_interface(struct ieee80211_hw *hw,
 	ret = ath10k_spectral_vif_stop(arvif);
 	if (ret)
 		ath10k_warn(ar, "failed to stop spectral for vdev %i: %d\n",
+			    arvif->vdev_id, ret);
+
+	ret = ath10k_csi_vif_stop(arvif);
+	if (ret)
+		ath10k_warn(ar, "failed to stop csi for vdev %i: %d\n",
 			    arvif->vdev_id, ret);
 
 	if (test_bit(ATH10K_FW_FEATURE_BEACON_TX_CB_CT,

@@ -3708,11 +3708,19 @@ static void ath10k_core_register_work(struct work_struct *work)
 		goto err_spectral_destroy;
 	}
 
+	status = ath10k_csi_create(ar);
+	if (status) {
+		ath10k_err(ar, "failed to initialize spectral\n");
+		goto err_csi_destroy;
+	}
+
 	set_bit(ATH10K_FLAG_CORE_REGISTERED, &ar->dev_flags);
 	return;
 
 err_spectral_destroy:
 	ath10k_spectral_destroy(ar);
+err_csi_destroy:
+	ath10k_csi_destroy(ar);
 err_debug_destroy:
 	ath10k_debug_destroy(ar);
 err_unregister_coredump:
@@ -3776,6 +3784,8 @@ void ath10k_core_unregister(struct ath10k *ar)
 	 * would be already be free'd recursively, leading to a double free.
 	 */
 	ath10k_spectral_destroy(ar);
+
+	ath10k_csi_destroy(ar);
 
 	/* We must unregister from mac80211 before we stop HTC and HIF.
 	 * Otherwise we will fail to submit commands to FW and mac80211 will be
