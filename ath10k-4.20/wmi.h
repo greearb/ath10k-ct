@@ -7275,7 +7275,7 @@ struct wmi_pdev_set_special_cmd {
 #define SET_SPECIAL_ID_PEER_STATS_PN          0x16 /* Report PN in peer-stats object */
 
 /* Requires specially compiled firmware (-T option) to have any useful effect. */
-#define SET_SPECIAL_ID_TX_DBG         0x99 /* 0x1 == enable, 0x2 == pkt-dbg, 0x0 == disable (default). */
+#define SET_SPECIAL_ID_RC_DBG         0x98 /* 0x1 == enable, 0x0 == disable (default). */
 
 /* Requires specially compiled firmware (-T option) to have any useful effect. */
 #define SET_SPECIAL_ID_TX_DBG         0x99 /* 0x1 == enable, 0x2 == pkt-dbg, 0x0 == disable (default). */

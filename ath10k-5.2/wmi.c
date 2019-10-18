@@ -1954,6 +1954,10 @@ int ath10k_wmi_cmd_send(struct ath10k *ar, struct sk_buff *skb, u32 cmd_id)
 		return ret;
 	}
 
+	ar->last_wmi_cmds[ar->last_wmi_cmd_idx % 4] = cmd_id;
+	ar->last_wmi_jiffies[ar->last_wmi_cmd_idx % 4] = jiffies;
+	ar->last_wmi_cmd_idx++;
+
 	wait_event_timeout(ar->wmi.tx_credits_wq, ({
 		if (loops++ == 0) {
 			/* try to send pending beacons first. they take priority.  But, only
@@ -1974,10 +1978,14 @@ int ath10k_wmi_cmd_send(struct ath10k *ar, struct sk_buff *skb, u32 cmd_id)
 		dev_kfree_skb_any(skb);
 
 	if (ret == -EAGAIN) {
-		ath10k_warn(ar, "wmi command %d timeout, restarting hardware\n",
-			    cmd_id);
+		ath10k_err(ar, "Cannot communicate with firmware, previous wmi cmds: %d:%d %d:%d %d:%d %d:%d, jiffies: %ld, attempting to fake crash and restart firmware.\n",
+			   ar->last_wmi_cmds[(ar->last_wmi_cmd_idx - 1) % 4], ar->last_wmi_jiffies[(ar->last_wmi_cmd_idx - 1) % 4],
+			   ar->last_wmi_cmds[(ar->last_wmi_cmd_idx - 2) % 4], ar->last_wmi_jiffies[(ar->last_wmi_cmd_idx - 2) % 4],
+			   ar->last_wmi_cmds[(ar->last_wmi_cmd_idx - 3) % 4], ar->last_wmi_jiffies[(ar->last_wmi_cmd_idx - 3) % 4],
+			   ar->last_wmi_cmds[(ar->last_wmi_cmd_idx - 4) % 4], ar->last_wmi_jiffies[(ar->last_wmi_cmd_idx - 4) % 4],
+			   jiffies);
+		ath10k_hif_fw_crashed_dump(ar);
 		set_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags);
-		queue_work(ar->workqueue, &ar->restart_work);
 	}
 
 	return ret;
@@ -2937,12 +2945,12 @@ int ath10k_wmi_event_debug_mesg(struct ath10k *ar, struct sk_buff *skb)
 	trace_ath10k_wmi_dbglog(ar, skb->data, skb->len);
 	ev = (struct ath10k_fw_dbglog_report *)skb->data;
 
-	spin_lock_bh(&ar->data_lock);
 	/* First 4 bytes are a messages-dropped-due-to-overflow counter,
 	 * and should not be recorded in the dbglog buffer, so we skip
 	 * them.
 	 */
 	WARN_ON(skb->len & 0x3);
+	spin_lock_bh(&ar->data_lock);
 	ath10k_dbg_save_fw_dbg_buffer(ar, ev->messages,
 				      (skb->len - 4)/sizeof(__le32));
 	spin_unlock_bh(&ar->data_lock);

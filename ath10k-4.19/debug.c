@@ -662,19 +662,21 @@ void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 	is_started = !list_empty(&ar->debug.fw_stats.pdevs);
 
 	if (is_started && !is_end) {
-		if (num_peers >= ATH10K_MAX_NUM_PEER_IDS) {
+		if (num_peers > ATH10K_MAX_NUM_PEER_IDS) {
 			/* Although this is unlikely impose a sane limit to
 			 * prevent firmware from DoS-ing the host.
 			 */
 			ath10k_fw_stats_peers_free(&ar->debug.fw_stats.peers);
 			ath10k_fw_extd_stats_peers_free(&ar->debug.fw_stats.peers_extd);
-			ath10k_warn(ar, "dropping fw peer stats\n");
+			ath10k_warn(ar, "dropping fw peer stats, num_peers: %d  max-peer-ids: %d\n",
+				    (int)(num_peers), (int)(ATH10K_MAX_NUM_PEER_IDS));
 			goto free;
 		}
 
-		if (num_vdevs >= BITS_PER_LONG) {
+		if (num_vdevs > BITS_PER_LONG) {
 			ath10k_fw_stats_vdevs_free(&ar->debug.fw_stats.vdevs);
-			ath10k_warn(ar, "dropping fw vdev stats\n");
+			ath10k_warn(ar, "dropping fw vdev stats, num-vdevs: %d, bits-per-long: %d\n",
+				    (int)(num_vdevs), (int)(BITS_PER_LONG));
 			goto free;
 		}
 
@@ -3383,6 +3385,12 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 		ath10k_warn(ar, "Setting disable-ibss-cca to %d\n",
 			    ar->eeprom_overrides.disable_ibss_cca);
 	}
+	else if (id == SET_SPECIAL_ID_RC_DBG) {
+		/* Set Rate-Ctrl debugging */
+		ar->eeprom_overrides.rc_debug = val;
+
+		ath10k_warn(ar, "Setting firmware rc-debug to 0x%x.\n", val);
+	}
 	else if (id == SET_SPECIAL_ID_TX_DBG) {
 		/* Set TX debugging */
 		ar->eeprom_overrides.tx_debug = val;
@@ -3470,11 +3478,15 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 	if ((id & 0xFF0000) == 0xFF0000) {
 		/* Send it to the firmware through the fwtest (stock-ish) API */
 		/* Search for WMI_FWTEST_CMDID in core.c */
-		ret = ath10k_wmi_pdev_set_fwtest(ar, id & 0xFFFF, val);
+		if (ar->state == ATH10K_STATE_ON) {
+			ret = ath10k_wmi_pdev_set_fwtest(ar, id & 0xFFFF, val);
+		}
 	}
 	else {
 		/* Send it to the firmware though ct-special API */
-		ret = ath10k_wmi_pdev_set_special(ar, id, val);
+		if (ar->state == ATH10K_STATE_ON) {
+			ret = ath10k_wmi_pdev_set_special(ar, id, val);
+		}
 	}
 unlock:
 	mutex_unlock(&ar->conf_mutex);

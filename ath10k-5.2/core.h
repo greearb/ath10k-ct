@@ -1409,6 +1409,10 @@ struct ath10k {
 
 	unsigned long tx_paused; /* see ATH10K_TX_PAUSE_ */
 
+	u32 last_wmi_cmds[4];
+	u32 last_wmi_jiffies[4];
+	u32 last_wmi_cmd_idx;
+
 #ifdef CONFIG_ATH10K_DEBUGFS
 	struct ath10k_debug debug;
 	struct {
@@ -1518,6 +1522,7 @@ struct ath10k {
 		u16 max_txpower;
 		u16 pdev_xretry_th; /* Max failed retries before wifi chip is reset, 10.1 firmware default is 0x40 */
 		u16 tx_debug;
+		u16 rc_debug;
 		u32 wmi_wd_keepalive_ms; /* 0xFFFFFFFF means disable, otherwise, FW will assert after X ms of not receiving
 					  * a NOP keepalive from the driver.  Suggested value is 0xFFFFFFFF, or 8000+.
 					  * 0 means use whatever firmware defaults to (probably 8000).
