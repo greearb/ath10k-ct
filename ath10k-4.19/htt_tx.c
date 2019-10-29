@@ -1250,34 +1250,44 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 			u8 dyn_bw = 0;
 			u8 bw = 0;
 			u16 rix;
+			bool is_ht, is_vht;
 
 			sband = ar->hw->wiphy->bands[band];
 
 			rix = info->control.rates[0].idx;
+			is_ht = info->control.rates[0].flags & IEEE80211_TX_RC_MCS;
+			is_vht = info->control.rates[0].flags & IEEE80211_TX_RC_VHT_MCS;
 
-			if (ath10k_mac_bitrate_is_cck(sband->bitrates[rix].bitrate)) {
-				mcs = sband->bitrates[rix].hw_value;
-				pream_type = 1; /* cck */
-			}
-			else {
-				/* So, I am not sure the proper way to determine HT or VHT rates
-				   here, so only support OFDM at this point. --Ben
-				 */
-				mcs = sband->bitrates[rix].hw_value; /* maybe - 4 ??? */
-				pream_type = 0; /* ofdm */
-			}
-			num_retries = info->control.rates[0].count;
+			if (info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT) {
+				if (is_ht) {
+					mcs = rix % 8;
+					nss = rix / 8;
+					pream_type = WMI_RATE_PREAMBLE_HT;
+				/* VHT is untested: */
+				} else if (is_vht) {
+					mcs = ieee80211_rate_get_vht_mcs(&info->control.rates[0]);
+					nss = ieee80211_rate_get_vht_nss(&info->control.rates[0]); /* maybe -1? */
+					pream_type = WMI_RATE_PREAMBLE_VHT;
+				} else if (ath10k_mac_bitrate_is_cck(sband->bitrates[rix].bitrate)) {
+					mcs = sband->bitrates[rix].hw_value;
+					pream_type = WMI_RATE_PREAMBLE_CCK;
+				} else {
+					mcs = sband->bitrates[rix].hw_value; /* maybe - 4 ??? */
+					pream_type = WMI_RATE_PREAMBLE_OFDM;
+				}
 
-			/* Only do the overrides for data frames. */
-			/*ath10k_warn(ar, "qos-data: %d data: %d  qos-nullfunc: %d  nullfunc: %d\n",
-				    ieee80211_is_data_qos(fc), ieee80211_is_data(fc),
-				    ieee80211_is_qos_nullfunc(fc), ieee80211_is_nullfunc(fc));*/
-			/* In order to allow ARP to work, don't mess with frames < 100 bytes in length, assume
-			 * test frames are larger.
-			 */
-			if ((msdu->len >= 100) &&
+				num_retries = info->control.rates[0].count;
+			} else if ((msdu->len >= 100) &&
 			    (ieee80211_is_data_qos(fc) || ieee80211_is_data(fc)) &&
 			    (!(ieee80211_is_qos_nullfunc(fc) || ieee80211_is_nullfunc(fc)))) {
+				/* Only do the overrides for data frames. */
+				/*ath10k_warn(ar, "qos-data: %d data: %d  qos-nullfunc: %d  nullfunc: %d\n",
+					    ieee80211_is_data_qos(fc), ieee80211_is_data(fc),
+					    ieee80211_is_qos_nullfunc(fc), ieee80211_is_nullfunc(fc));*/
+				/* In order to allow ARP to work, don't mess with frames < 100 bytes in length, assume
+				 * test frames are larger.
+				 */
+
 				tpc = arvif->txo_tpc;
 				sgi = arvif->txo_sgi;
 				mcs = arvif->txo_mcs;
@@ -1289,10 +1299,8 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 				rix = arvif->txo_rix;
 				/*ath10k_warn(ar, "gathering txrate info from arvif, tpc: %d mcs: %d nss: %d pream_type: %d num_retries: %d dyn_bw: %d bw: %d rix: %d\n",
 				  tpc, mcs, nss, pream_type, num_retries, dyn_bw, bw, rix);*/
-			}
-			else {
-				if (!(info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT))
-					goto skip_fixed_rate;
+			} else {
+				goto skip_fixed_rate;
 			}
 
 			if (ar->dev_id == QCA988X_2_0_DEVICE_ID ||
