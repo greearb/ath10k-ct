@@ -1250,21 +1250,30 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 			u8 dyn_bw = 0;
 			u8 bw = 0;
 			u16 rix;
+			bool is_ht, is_vht;
 
 			sband = ar->hw->wiphy->bands[band];
 
 			rix = info->control.rates[0].idx;
+			is_ht = info->control.rates[0].flags & IEEE80211_TX_RC_MCS;
+			is_vht = info->control.rates[0].flags & IEEE80211_TX_RC_VHT_MCS;
 
 			if (info->control.flags & IEEE80211_TX_CTRL_RATE_INJECT) {
-				if (ath10k_mac_bitrate_is_cck(sband->bitrates[rix].bitrate)) {
+				if (is_ht) {
+					mcs = rix % 8;
+					nss = rix / 8;
+					pream_type = WMI_RATE_PREAMBLE_HT;
+				/* VHT is untested: */
+				} else if (is_vht) {
+					mcs = ieee80211_rate_get_vht_mcs(&info->control.rates[0]);
+					nss = ieee80211_rate_get_vht_nss(&info->control.rates[0]); /* maybe -1? */
+					pream_type = WMI_RATE_PREAMBLE_VHT;
+				} else if (ath10k_mac_bitrate_is_cck(sband->bitrates[rix].bitrate)) {
 					mcs = sband->bitrates[rix].hw_value;
-					pream_type = 1; /* cck */
+					pream_type = WMI_RATE_PREAMBLE_CCK;
 				} else {
-					/* So, I am not sure the proper way to determine HT or VHT rates
-					   here, so only support OFDM at this point. --Ben
-					 */
 					mcs = sband->bitrates[rix].hw_value; /* maybe - 4 ??? */
-					pream_type = 0; /* ofdm */
+					pream_type = WMI_RATE_PREAMBLE_OFDM;
 				}
 
 				num_retries = info->control.rates[0].count;
