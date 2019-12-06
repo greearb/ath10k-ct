@@ -5628,6 +5628,8 @@ static int ath10k_start(struct ieee80211_hw *hw)
 	case ATH10K_STATE_ON:
 	case ATH10K_STATE_RESTARTED:
 	case ATH10K_STATE_WEDGED:
+		ath10k_err(ar, "ath10k_start called in invalid state (on, restarted or wedged): %d\n",
+			   ar->state);
 		WARN_ON(1);
 		ret = -EINVAL;
 		goto err;

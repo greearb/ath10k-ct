@@ -3165,6 +3165,8 @@ static int ath10k_pci_hif_power_up(struct ath10k *ar,
 	if (ret) {
 		if (ath10k_pci_has_fw_crashed(ar)) {
 			ath10k_warn(ar, "firmware crashed during chip reset\n");
+			set_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags);
+			wake_up(&ar->wmi.tx_credits_wq);
 			ath10k_pci_fw_crashed_clear(ar);
 			ath10k_pci_fw_crashed_dump(ar);
 		}
@@ -3460,6 +3462,8 @@ static int ath10k_pci_napi_poll(struct napi_struct *ctx, int budget)
 	int done = 0;
 
 	if (ath10k_pci_has_fw_crashed(ar)) {
+		set_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags);
+		wake_up(&ar->wmi.tx_credits_wq);
 		ath10k_pci_fw_crashed_clear(ar);
 		ath10k_pci_fw_crashed_dump(ar);
 		napi_complete(ctx);
