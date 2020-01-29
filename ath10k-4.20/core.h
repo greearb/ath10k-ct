@@ -714,6 +714,8 @@ struct ath10k_debug {
 	struct dentry *debugfs_phy;
 
 	struct ath10k_rx_reorder_stats rx_reorder_stats;
+	struct ath10k_pdev_ext_stats_ct pdev_ext_stats;
+	s32 nf_avg[4]; /* avg of all chains, reported by pdev_ext_stats */
 	struct ath10k_fw_stats fw_stats;
 	struct completion fw_stats_complete;
 	bool fw_stats_done;

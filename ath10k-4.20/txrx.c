@@ -247,8 +247,12 @@ int ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 
 	if (tx_done->status == HTT_TX_COMPL_STATE_ACK &&
 	    tx_done->ack_rssi != ATH10K_INVALID_RSSI) {
-		info->status.ack_signal = ATH10K_DEFAULT_NOISE_FLOOR +
-						tx_done->ack_rssi;
+		int nf = ATH10K_DEFAULT_NOISE_FLOOR;
+#ifdef CONFIG_ATH10K_DEBUGFS
+		if (ar->debug.nf_avg[0] && ar->debug.nf_avg[0] > -512)
+			nf = ar->debug.nf_avg[0];
+#endif
+		info->status.ack_signal = nf + tx_done->ack_rssi;
 		info->status.is_valid_ack_signal = true;
 	}
 

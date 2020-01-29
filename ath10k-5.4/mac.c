@@ -4504,9 +4504,9 @@ static int ath10k_mac_tx(struct ath10k *ar,
 		}
 	}
 
-	if ((!noque_offchan) && info->flags & IEEE80211_TX_CTL_TX_OFFCHAN) {
+	if (!noque_offchan && info->flags & IEEE80211_TX_CTL_TX_OFFCHAN) {
 		if (!ath10k_mac_tx_frm_has_freq(ar)) {
-			ath10k_dbg(ar, ATH10K_DBG_MAC, "no-tx-frm-has-freq: queued offchannel skb %pK, len: %d\n",
+			ath10k_dbg(ar, ATH10K_DBG_MAC, "mac queued offchannel skb %pK len %d\n",
 				   skb, skb->len);
 
 			skb_queue_tail(&ar->offchan_tx_queue, skb);
@@ -4569,7 +4569,7 @@ void ath10k_offchan_tx_work(struct work_struct *work)
 
 		mutex_lock(&ar->conf_mutex);
 
-		ath10k_dbg(ar, ATH10K_DBG_MAC, "offchan-tx-work: mac offchannel skb %pK len: %d\n",
+		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac offchannel skb %pK len %d\n",
 			   skb, skb->len);
 
 		hdr = (struct ieee80211_hdr *)skb->data;
@@ -4669,8 +4669,10 @@ void ath10k_mgmt_over_wmi_tx_work(struct work_struct *work)
 			     ar->running_fw->fw_file.fw_features)) {
 			paddr = dma_map_single(ar->dev, skb->data,
 					       skb->len, DMA_TO_DEVICE);
-			if (!paddr)
+			if (dma_mapping_error(ar->dev, paddr)) {
+				ieee80211_free_txskb(ar->hw, skb);
 				continue;
+			}
 			ret = ath10k_wmi_mgmt_tx_send(ar, skb, paddr);
 			if (ret) {
 				ath10k_warn(ar, "failed to transmit management frame by ref via WMI: %d\n",
@@ -5938,7 +5940,8 @@ static int ath10k_mac_txpower_recalc(struct ath10k *ar)
 	lockdep_assert_held(&ar->conf_mutex);
 
 	list_for_each_entry(arvif, &ar->arvifs, list) {
-		if (arvif->txpower <= 0)
+		/* txpower not initialized yet? */
+		if (arvif->txpower == INT_MIN)
 			continue;
 
 		if (txpower == -1)

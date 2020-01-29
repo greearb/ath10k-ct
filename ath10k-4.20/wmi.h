@@ -4670,6 +4670,23 @@ enum wmi_stats_id {
 };
 
 #define WMI_STAT_CUSTOM_RX_REORDER_STATS 0
+#define WMI_STAT_CUSTOM_PDEV_EXT_STATS   1
+
+struct ath10k_pdev_ext_stats_ct {
+	u32 count; /* how many u32 data items (after flags) do we have? */
+	u32 flags; /* (1<<0): 160Mhz supported */
+
+	u32 num_chains; /* FW is compiled for this many chains */
+
+	s32 chan_nf_0; /* noise floor for chain 0 */
+	s32 chan_nf_1; /* noise floor for chain 1 */
+	s32 chan_nf_2; /* noise floor for chain 2 */
+	s32 chan_nf_3; /* noise floor for chain 3 */
+	/* Not sure exactly why there are only 3 of these used, see ar6000PeriodicNfSaveNLoadCalExt80 */
+	s32 chan_nf_sec80_1; /* noise floor for chain 1? */
+	s32 chan_nf_sec80_2; /* noise floor for chain 2? */
+	s32 chan_nf_sec80_3; /* noise floor for chain 3? */
+};
 
 enum wmi_10_4_stats_id {
 	WMI_10_4_STAT_PEER		= BIT(0),
