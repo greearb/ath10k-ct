@@ -1281,6 +1281,12 @@ start_again:
 				ar->fwcfg.flags |= ATH10K_FWCFG_NOHWCRYPT;
 			}
 		}
+		else if (strcasecmp(filename, "allow_all_mcs") == 0) {
+			if (kstrtol(val, 0, &t) == 0) {
+				ar->fwcfg.allow_all_mcs = t;
+				ar->fwcfg.flags |= ATH10K_FWCFG_ALLOW_ALL_MCS;
+			}
+		}
 		else if (strcasecmp(filename, "ct_sta_mode") == 0) {
 			if (kstrtol(val, 0, &t) == 0) {
 				ar->fwcfg.ct_sta_mode = t;

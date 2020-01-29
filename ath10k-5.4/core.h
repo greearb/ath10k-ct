@@ -1258,6 +1258,7 @@ struct ath10k {
 #define ATH10K_FWCFG_NOBEAMFORM_MU  (1<<14)
 #define ATH10K_FWCFG_NOBEAMFORM_SU  (1<<15)
 #define ATH10K_FWCFG_CT_STA         (1<<16)
+#define ATH10K_FWCFG_ALLOW_ALL_MCS  (1<<17)
 
 		u32 flags; /* let us know which fields have been set */
 		char calname[100];
@@ -1281,6 +1282,7 @@ struct ath10k {
 		int regdom;
 		u32 bmiss_vdevs; /* To disable, set to 0 */
 		u32 max_amsdus;
+		u32 allow_all_mcs;
 	} fwcfg;
 
 	struct {

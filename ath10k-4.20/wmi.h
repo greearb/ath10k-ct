@@ -6763,6 +6763,19 @@ struct wmi_10_1_peer_assoc_complete_cmd {
 struct wmi_ct_assoc_overrides {
 	/* CT firmware ver 15+ only */
 #define PEER_ASSOC_EXT_USE_OVERRIDES (1<<0)
+	/* wave-1 ath10k-ct firmware, at least, has logic to ignore certain rates.
+	 * setting this flag below will disable that logic and give host full control
+	 * of the rate-set to use.
+	 * Rates disabled in firmware are:
+	 * 2x2 11ac rate table does not include:
+	 *   MCS 1x1: 5, 6, 7, 8, 9
+	 *       2x2: 0, 1, 2
+         * 3x3 11ac rate table does not include:
+	 *   MCS 1x1: 3, 4, 5, 6, 7, 8, 9
+	 *       2x2: 0, 1, 5, 6, 7, 8, 9
+	 *       3x3: 0, 1, 2, 3
+	 * As of Jan 29, 2020, this flag is ignored on wave-2 ath10k-ct firmware
+	 */
 #define PEER_ASSOC_EXT_IGNORE_MCS_4_NSS_MASK (1<<1)
 #define PEER_ASSOC_EXT_LEN_32        (1<<2) /* Has 32-override bytes */
 	__le32 ext_flags;

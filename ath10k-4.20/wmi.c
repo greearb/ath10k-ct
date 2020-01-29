@@ -8276,6 +8276,8 @@ ath10k_wmi_peer_assoc_fill(struct ath10k *ar, void *buf,
 			int i;
 			int opver = ar->running_fw->fw_file.wmi_op_version;
 			ext_flags |= PEER_ASSOC_EXT_USE_OVERRIDES;
+			if (ar->fwcfg.allow_all_mcs)
+				ext_flags |= PEER_ASSOC_EXT_IGNORE_MCS_4_NSS_MASK;
 			ext_flags |= PEER_ASSOC_EXT_LEN_32;
 
 			ath10k_dbg(ar, ATH10K_DBG_WMI,
