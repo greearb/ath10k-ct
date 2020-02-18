@@ -10123,7 +10123,10 @@ int ath10k_mac_register(struct ath10k *ar)
 		goto err_dfs_detector_exit;
 	}
 
-	if (test_bit(WMI_SERVICE_PER_PACKET_SW_ENCRYPT, ar->wmi.svc_map)) {
+	if (test_bit(WMI_SERVICE_PER_PACKET_SW_ENCRYPT, ar->wmi.svc_map) ||
+	    test_bit(ATH10K_FW_FEATURE_CONSUME_BLOCK_ACK_CT, ar->normal_mode_fw.fw_file.fw_features)) {
+			/* assume enough raw tx support for VLAN if a recent CT
+			firmware is detected. */
 		ar->hw->wiphy->interface_modes |= BIT(NL80211_IFTYPE_AP_VLAN);
 		ar->hw->wiphy->software_iftypes |= BIT(NL80211_IFTYPE_AP_VLAN);
 	}
