@@ -5263,6 +5263,8 @@ enum wmi_rate_preamble {
 	WMI_RATE_PREAMBLE_VHT,
 };
 
+extern const char* cck_speed_by_idx[4];
+
 #define ATH10K_HW_NSS(rate)		(1 + (((rate) >> 4) & 0x3))
 #define ATH10K_HW_PREAMBLE(rate)	(((rate) >> 6) & 0x3)
 #define ATH10K_HW_MCS_RATE(rate)	((rate) & 0xf)

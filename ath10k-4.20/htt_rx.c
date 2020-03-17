@@ -2201,14 +2201,14 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 			/* NOTE:  It seems only the first ampdu returns useful info here, at least with 'v1'
 			 * of the ath10k-ct wave-1 tx-rate logic.
 			 */
-
-			/* ath10k_warn(ar,
-				    "htt tx completion, msdu_id: %d  tx-rate-code: 0x%x tx-rate-flags: 0x%x  tried: %d  failed: %d\n",
-				    tx_done.msdu_id,
-				    tx_done.tx_rate_code,
-				    tx_done.tx_rate_flags,
-				    tx_done.mpdus_tried,
-				    tx_done.mpdus_failed);*/
+			if (ar->eeprom_overrides.tx_debug & 0x3)
+				ath10k_warn(ar,
+					    "htt tx completion, msdu_id: %d  tx-rate-code: 0x%x tx-rate-flags: 0x%x  tried: %d  failed: %d\n",
+					    tx_done.msdu_id,
+					    tx_done.tx_rate_code,
+					    tx_done.tx_rate_flags,
+					    tx_done.mpdus_tried,
+					    tx_done.mpdus_failed);
 
 			/* kfifo_put: In practice firmware shouldn't fire off per-CE
 			 * interrupt and main interrupt (MSI/-X range case) for the same
@@ -2284,14 +2284,15 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 					tx_done.mpdus_failed = retries_info >> 8;
 				}
 			}
-			/*ath10k_warn(ar,
-				    "htt tx completion-w2, msdu_id: %d  tx-rate-code: 0x%x tx-rate-flags: 0x%x  tried: %d  failed: %d ack-rssi: %d\n",
-				    tx_done.msdu_id,
-				    tx_done.tx_rate_code,
-				    tx_done.tx_rate_flags,
-				    tx_done.mpdus_tried,
-				    tx_done.mpdus_failed,
-				    tx_done.ack_rssi);*/
+			if (ar->eeprom_overrides.tx_debug & 0x3)
+				ath10k_warn(ar,
+					    "htt tx completion-w2, msdu_id: %d  tx-rate-code: 0x%x tx-rate-flags: 0x%x  tried: %d  failed: %d ack-rssi: %d\n",
+					    tx_done.msdu_id,
+					    tx_done.tx_rate_code,
+					    tx_done.tx_rate_flags,
+					    tx_done.mpdus_tried,
+					    tx_done.mpdus_failed,
+					    tx_done.ack_rssi);
 
 			/* Firmware reports garbage for ack-rssi if packet was not acked. */
 			if (unlikely(tx_done.status != HTT_TX_COMPL_STATE_ACK))

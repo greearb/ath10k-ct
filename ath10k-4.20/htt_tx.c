@@ -1443,9 +1443,7 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 			    ar->dev_id == QCA988X_2_0_DEVICE_ID_UBNT ||
 			    ar->dev_id == QCA9887_1_0_DEVICE_ID) {
 				/* wave-1 CT firmware has this API */
-				/* TODO-BEN:  Only valid for legacy rates.  Need more work to handl HT & VHT */
-				u32 rate_code = ath10k_convert_hw_rate_to_rc(sband->bitrates[rix].hw_value,
-									     sband->bitrates[rix].bitrate);
+				u32 rate_code = (pream_type << 6) | (nss << 4) | mcs;
 
 				if (num_retries == 0) {
 					/* Will never hit the air..surely this is not what user wanted! */
@@ -1458,9 +1456,9 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 				peer_id |= (0x20000000); /* Let FW know this is definitely a rate-code */
 
 				if (ar->eeprom_overrides.tx_debug & 0x3)
-					ath10k_warn(ar, "wave-1 vdev-id: %d msdu: %p  info: %p peer_id: 0x%x  rates.idx: %d  rate_code: 0x%x  hw-value: %d  bitrate: %d count: %d \n",
+					ath10k_warn(ar, "wave-1 vdev-id: %d msdu: %p  info: %p peer_id: 0x%x  rates.idx: %d  rate_code: 0x%x  hw-value: %d  bitrate: %d count: %d mcs: %d pream-type: %d  nss: %d\n",
 						    (int)(vdev_id), msdu, info, peer_id, rix, rate_code, sband->bitrates[rix].hw_value,
-						    sband->bitrates[rix].bitrate, (u32)(info->control.rates[0].count));
+						    sband->bitrates[rix].bitrate, (u32)(info->control.rates[0].count), mcs, pream_type, nss);
 			}
 			else {
 				if (unlikely(info->flags & IEEE80211_TX_CTL_NO_ACK)) {

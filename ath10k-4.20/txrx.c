@@ -100,6 +100,19 @@ static void ath10k_set_tx_rate_status(struct ath10k *ar,
 			rate->idx = cck_rateidx[hw_rate];
 		else
 			rate->idx = cck_rateidx[0];
+
+		if (ch && (ch->band == NL80211_BAND_5GHZ)) {
+			/* Not expecting CCK rates here at all, and rate->idx will be related
+			 * to OFDM, so print warning and continue.  At least kernel logs will show
+			 * indication of true rate.
+			 */
+			static unsigned long next_jiffies = 0;
+			if (next_jiffies == 0 || time_after(jiffies, next_jiffies)) {
+				ath10k_warn(ar, "CCK rate reported on 5Ghz, hw_rate: %d  rate-idx: %d  Speed: %s\n",
+					    hw_rate, rate->idx, cck_speed_by_idx[rate->idx]);
+				next_jiffies = jiffies + HZ;
+			}
+		}
 		break;
 
         case WMI_RATE_PREAMBLE_OFDM:

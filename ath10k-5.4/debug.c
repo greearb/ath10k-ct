@@ -1601,10 +1601,12 @@ static ssize_t ath10k_read_set_rate_override(struct file *file,
 	const char buf[] =
 		"This allows specify specif tx rate parameters for all DATA frames on a vdev\n"
 		"Only wave-2 CT firmware has full support.  Wave-1 CT firmware has at least\n"
-		"some support (rix mostly).  Wave-2 does not use rix.\n"
+		"some support (preamble, preamble, mcs, retries).\n"
 		"To set a value, you specify the dev-name and key-value pairs:\n"
-		"tpc=10 sgi=1 mcs=x nss=x pream=x retries=x dynbw=0|1 bw=x rix=x enable=0|1\n"
+		"tpc=10 sgi=1 mcs=x nss=x pream=x retries=x dynbw=0|1 bw=x enable=0|1\n"
 		"pream: 0=ofdm, 1=cck, 2=HT, 3=VHT\n"
+		"cck-mcs: 0=11Mbps, 1=5.5Mbps, 2=2Mbps, 3=1Mbps\n"
+		"ofdm-mcs: 0=48Mbps, 1=24Mbps, 2=12Mbps, 3=6Mbps, 4=54Mbps, 5=36Mbps, 6=18Mbps, 7=9Mbps\n"
 		"tpc is in 1db increments, 255 means use defaults, bw is 0-3 for 20-160\n"
 		" For example, wlan0:  echo \"wlan0 tpc=255 sgi=1 mcs=0 nss=1 pream=3 retries=1 dynbw=0 bw=0 active=1\" > ...ath10k/set_rate_override\n";
 
@@ -2826,8 +2828,21 @@ static ssize_t ath10k_write_nf_cal_period(struct file *file,
 		return -EINVAL;
 
 	/* there's no way to switch back to the firmware default */
-	if (period == 0)
-		return -EINVAL;
+	if (period == 0) {
+		/* if CT an 10.1 firmware, then it OK to set 0 */
+		if ((ar->running_fw->fw_file.wmi_op_version == ATH10K_FW_WMI_OP_VERSION_10_1) &&
+		    (test_bit(ATH10K_FW_FEATURE_CUST_STATS_CT, ar->running_fw->fw_file.fw_features))) {
+			/* wave-1 CT firmware (since March 11, 2020), will let you set the period
+			 * to zero (0) to disable calibration.  Older CT firmware will just ignore this
+			 * setting anyway.
+			 */
+			ath10k_warn(ar, "Disabling calibration (period == 0)\n");
+		}
+		else {
+			ath10k_warn(ar, "Calibration period of zero is not allowed on this firmware.\n");
+			return -EINVAL;
+		}
+	}
 
 	mutex_lock(&ar->conf_mutex);
 
@@ -2842,8 +2857,8 @@ static ssize_t ath10k_write_nf_cal_period(struct file *file,
 	ret = ath10k_wmi_pdev_set_param(ar, ar->wmi.pdev_param->cal_period,
 					ar->debug.nf_cal_period);
 	if (ret) {
-		ath10k_warn(ar, "cal period cfg failed from debugfs: %d\n",
-			    ret);
+		ath10k_warn(ar, "cal period %ld cfg failed from debugfs: %d\n",
+			    period, ret);
 		goto exit;
 	}
 

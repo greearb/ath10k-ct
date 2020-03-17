@@ -37,6 +37,8 @@
 #define ATH10K_WMI_BARRIER_TIMEOUT_HZ (3 * HZ)
 #define ATH10K_WMI_DFS_CONF_TIMEOUT_HZ (HZ / 6)
 
+const char* cck_speed_by_idx[] = {"1Mbps", "2Mbps", "5.5Mbps", "11Mbps" };
+
 /* MAIN WMI cmd track */
 static struct wmi_cmd_map wmi_cmd_map = {
 	.init_cmdid = WMI_INIT_CMDID,
@@ -6709,6 +6711,7 @@ static void ath10k_wmi_10_4_op_rx(struct ath10k *ar, struct sk_buff *skb)
 		break;
 	case WMI_10_4_TDLS_PEER_EVENTID:
 		ath10k_wmi_handle_tdls_peer_event(ar, skb);
+		break;
 	case WMI_10_4_TXBF_CV_MESG_EVENTID:
 		ath10k_wmi_event_txbf_cv_mesg(ar, skb);
 		break;
