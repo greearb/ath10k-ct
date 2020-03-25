@@ -7896,12 +7896,14 @@ void ath10k_mac_wait_tx_complete(struct ath10k *ar)
 {
 	bool skip;
 	long time_left;
+	int pending_tx = 0;
 
 	time_left = wait_event_timeout(ar->htt.empty_tx_wq, ({
 			bool empty;
 
 			spin_lock_bh(&ar->htt.tx_lock);
-			empty = (ar->htt.num_pending_tx == 0);
+			pending_tx = ar->htt.num_pending_tx;
+			empty = (pending_tx == 0);
 			spin_unlock_bh(&ar->htt.tx_lock);
 
 			skip = (ar->state == ATH10K_STATE_WEDGED) ||
@@ -7912,8 +7914,8 @@ void ath10k_mac_wait_tx_complete(struct ath10k *ar)
 		}), ATH10K_FLUSH_TIMEOUT_HZ);
 
 	if (time_left == 0 || skip)
-		ath10k_warn(ar, "failed to flush transmit queue (skip %i ar-state %i): %ld\n",
-			    skip, ar->state, time_left);
+		ath10k_warn(ar, "failed to flush transmit queue (skip %i ar-state %i pending-tx %d): %ld\n",
+			    skip, ar->state, pending_tx, time_left);
 }
 
 static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
@@ -7925,9 +7927,6 @@ static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	u32 bitmap;
 	u32 vid = 0xFFFFFFFF;
 
-	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac flush vdev %d drop %d queues 0x%x\n",
-		   arvif ? arvif->vdev_id : -1, drop, queues);
-
 	mutex_lock(&ar->conf_mutex);
 
 	if (ar->state == ATH10K_STATE_WEDGED)
@@ -7936,7 +7935,14 @@ static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	if (vif) {
 		arvif = (void *)vif->drv_priv;
 		vid = arvif->vdev_id;
+		ath10k_info(ar, "mac flush vdev %d drop %d queues 0x%x ar->paused: 0x%lx  arvif->paused: 0x%lx\n",
+			    arvif->vdev_id, drop, queues, ar->tx_paused, arvif->tx_paused);
 	}
+	else {
+		ath10k_info(ar, "mac flush null vif, drop %d queues 0x%x\n",
+			    drop, queues);
+	}
+
 
 	/* NOTE:  As of Aug 10, CT firmware supports flushing a single vdev
 	 * by passing the vdev_id, and leaving peer_addr all zeros.  But the logic
@@ -7963,6 +7969,13 @@ static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		if (drop || test_bit(ATH10K_FW_FEATURE_PEER_FLOW_CONTROL,
 				     ar->running_fw->fw_file.fw_features))
 			goto skip;
+
+		/* I cannot find a good way to know if an individual vdev is flushed or
+		 * not.  So, if that is being requested, just skip the wait.
+		 */
+		if (arvif)
+			goto skip;
+
 	}
 	else if (drop) {
 		/* Upstream QCA firmware can handle this I guess...seems weird logic
@@ -7980,6 +7993,7 @@ static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		goto skip;
 	}
 
+	/* Wait for entire tx-q to finish transmitting */
 	ath10k_mac_wait_tx_complete(ar);
 
 skip:

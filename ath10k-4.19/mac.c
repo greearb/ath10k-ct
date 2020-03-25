@@ -7813,7 +7813,7 @@ static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	}
 
 	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac flush vdev %d drop %d queues 0x%x\n",
-		   arvif ? arvif->vdev_id : -1, drop, queues);
+		   vid, drop, queues);
 
 	/* mac80211 doesn't care if we really xmit queued frames or not
 	 * we'll collect those frames either way if we stop/delete vdevs
@@ -7852,6 +7852,13 @@ static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		if (drop || test_bit(ATH10K_FW_FEATURE_PEER_FLOW_CONTROL,
 				     ar->running_fw->fw_file.fw_features))
 			goto skip;
+
+		/* I cannot find a good way to know if an individual vdev is flushed or
+		 * not.  So, if that is being requested, just skip the wait.
+		 */
+		if (arvif)
+			goto skip;
+
 	}
 
 	time_left = wait_event_timeout(ar->htt.empty_tx_wq, ({
