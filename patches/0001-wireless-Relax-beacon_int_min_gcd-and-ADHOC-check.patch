@@ -1,0 +1,36 @@
+From a259641b1295b19d4423c04e2aa4dd4694de05a4 Mon Sep 17 00:00:00 2001
+From: Ben Greear <greearb@candelatech.com>
+Date: Tue, 15 Jan 2019 15:36:14 -0800
+Subject: [PATCH] wireless: Relax beacon_int_min_gcd and ADHOC check.
+
+This seems overly restrictive to me.  Keeps me from being
+able to load ath10k with ADHOC mode enabled.
+
+Signed-off-by: Ben Greear <greearb@candelatech.com>
+---
+ net/wireless/core.c | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/net/wireless/core.c b/net/wireless/core.c
+index 0b7ae36da8e8..c8aaa69d91a5 100644
+--- a/net/wireless/core.c
++++ b/net/wireless/core.c
+@@ -621,10 +621,11 @@ static int wiphy_verify_combinations(struct wiphy *wiphy)
+ 			 * some drivers support that, possibly only with fixed
+ 			 * beacon intervals for IBSS.
+ 			 */
+-			if (WARN_ON(types & BIT(NL80211_IFTYPE_ADHOC) &&
+-				    c->beacon_int_min_gcd)) {
+-				return -EINVAL;
+-			}
++			// Give users more rope. -Ben
++			//if (WARN_ON(types & BIT(NL80211_IFTYPE_ADHOC) &&
++			//	    c->beacon_int_min_gcd)) {
++			//	return -EINVAL;
++			//}
+ 
+ 			cnt += c->limits[j].max;
+ 			/*
+-- 
+2.20.1
+

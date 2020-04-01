@@ -5,3 +5,6 @@ To compile 4.4 kernels, you probably need to add this patch:
 And, if it will not apply, try the 0100- patch first.
 
 
+For recent kernels, you probably need to add this one:
+0001-wireless-Relax-beacon_int_min_gcd-and-ADHOC-check.patch
+
