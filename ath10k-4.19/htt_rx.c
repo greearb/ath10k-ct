@@ -2068,6 +2068,12 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 				    tx_done.mpdus_tried,
 				    tx_done.mpdus_failed);*/
 
+			/* workaround for possibly firmware bug */
+			if (unlikely(tx_done.tx_rate_code == ATH10K_CT_TX_BEACON_INVALID_RATE_CODE)) {
+				dev_warn_once(ar->dev, "htt tx, wave-1-ct: fixing invalid VHT TX rate code 0xff\n");
+				tx_done.tx_rate_code = 0;
+			}
+
 			/* kfifo_put: In practice firmware shouldn't fire off per-CE
 			 * interrupt and main interrupt (MSI/-X range case) for the same
 			 * HTC service so it should be safe to use kfifo_put w/o lock.
@@ -2156,6 +2162,12 @@ static void ath10k_htt_rx_tx_compl_ind(struct ath10k *ar,
 			if (unlikely(tx_done.status != HTT_TX_COMPL_STATE_ACK))
 				tx_done.ack_rssi = 0;
 
+			/* workaround for possibly firmware bug */
+			if (unlikely(tx_done.tx_rate_code == ATH10K_CT_TX_BEACON_INVALID_RATE_CODE)) {
+				dev_warn_once(ar->dev, "htt tx, ack-rssi-filled: fixing invalid VHT TX rate code 0xff\n");
+				tx_done.tx_rate_code = 0;
+			}
+
 			ath10k_txrx_tx_unref(htt, &tx_done);
 		}
 	} else {
@@ -2166,6 +2178,12 @@ do_generic:
 		for (i = 0; i < resp->data_tx_completion.num_msdus; i++) {
 			msdu_id = resp->data_tx_completion.msdus[i];
 			tx_done.msdu_id = __le16_to_cpu(msdu_id);
+
+			/* workaround for possibly firmware bug */
+			if (unlikely(tx_done.tx_rate_code == ATH10K_CT_TX_BEACON_INVALID_RATE_CODE)) {
+				dev_warn_once(ar->dev, "htt tx ct: fixing invalid VHT TX rate code 0xff\n");
+				tx_done.tx_rate_code = 0;
+			}
 
 			/* kfifo_put: In practice firmware shouldn't fire off per-CE
 			 * interrupt and main interrupt (MSI/-X range case) for the same

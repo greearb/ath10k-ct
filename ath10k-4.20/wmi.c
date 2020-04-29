@@ -6085,7 +6085,7 @@ static void ath10k_wmi_generic_buffer_eventid(struct ath10k *ar, struct sk_buff 
 static void ath10k_wmi_event_beacon_tx(struct ath10k *ar, struct sk_buff *skb)
 {
 	struct ath10k_vif *arvif;
-	const struct wmi_beacon_tx_event *ev;
+	struct wmi_beacon_tx_event *ev;
 	u32 vdev_id;
 	u32 status;
 
@@ -6104,6 +6104,12 @@ static void ath10k_wmi_event_beacon_tx(struct ath10k *ar, struct sk_buff *skb)
 		   vdev_id, status,
 		   status == 0 ? "OK" : (status == 1 ? "XRETRY" : (status == 2 ? "DROP" : "UNKNOWN")),
 		   ev->mpdus_tried, ev->mpdus_failed, ev->tx_rate_code, ev->tx_rate_flags, ev->tsFlags);
+
+	/* workaround for possibly firmware bug */
+	if (unlikely(ev->tx_rate_code == ATH10K_CT_TX_BEACON_INVALID_RATE_CODE)) {
+		dev_warn_once(ar->dev, "wmi: fixing invalid VHT TX rate code 0xff\n");
+		ev->tx_rate_code = 0;
+	}
 
 	arvif = ath10k_get_arvif(ar, vdev_id);
 	if (!arvif) {

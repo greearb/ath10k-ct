@@ -1941,6 +1941,7 @@ struct ath10k_htt {
 
 	u8 target_version_major;
 	u8 target_version_minor;
+	bool needs_unlock;
 	struct completion target_version_received;
 	u8 max_num_amsdu;
 	u8 max_num_ampdu;
