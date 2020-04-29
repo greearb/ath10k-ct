@@ -43,6 +43,7 @@
 /* Antenna noise floor */
 #define ATH10K_DEFAULT_NOISE_FLOOR -95
 
+#define ATH10K_CT_TX_BEACON_INVALID_RATE_CODE 0xff
 #define ATH10K_INVALID_RSSI 128
 
 /* This used to be 128, but klukonin reports increasing this helps in at least
