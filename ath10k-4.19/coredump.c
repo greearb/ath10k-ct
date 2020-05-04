@@ -1018,7 +1018,9 @@ static struct ath10k_dump_file_data *ath10k_coredump_build(struct ath10k *ar)
 	struct ath10k_ce_crash_hdr *ce_hdr;
 	struct ath10k_dump_file_data *dump_data;
 	struct ath10k_tlv_dump_data *dump_tlv;
+#ifdef CONFIG_ATH10K_DEBUGFS
 	struct ath10k_dbglog_entry_storage_user *dbglog_storage;
+#endif
 	size_t hdr_len = sizeof(*dump_data);
 	size_t len, sofar = 0;
 	unsigned char *buf;
@@ -1039,7 +1041,9 @@ static struct ath10k_dump_file_data *ath10k_coredump_build(struct ath10k *ar)
 	if (test_bit(ATH10K_FW_CRASH_DUMP_RAM_DATA, &ath10k_coredump_mask))
 		len += sizeof(*dump_tlv) + crash_data->ramdump_buf_len;
 
+#ifdef CONFIG_ATH10K_DEBUGFS
 	len += sizeof(*dump_tlv) + sizeof(ar->debug.dbglog_entry_data);
+#endif
 	len += sizeof(*dump_tlv) + sizeof(crash_data->stack_buf);
 	len += sizeof(*dump_tlv) + sizeof(crash_data->exc_stack_buf);
 
@@ -1133,6 +1137,7 @@ static struct ath10k_dump_file_data *ath10k_coredump_build(struct ath10k *ar)
 		sofar += sizeof(*dump_tlv) + crash_data->ramdump_buf_len;
 	}
 
+#ifdef CONFIG_ATH10K_DEBUGFS
 	/* Gather dbg-log */
 	tmp = sizeof(ar->debug.dbglog_entry_data);
 	dump_tlv = (struct ath10k_tlv_dump_data *)(buf + sofar);
@@ -1147,6 +1152,7 @@ static struct ath10k_dump_file_data *ath10k_coredump_build(struct ath10k *ar)
 	dbglog_storage->tail_idx =
 		cpu_to_le32(ar->debug.dbglog_entry_data.tail_idx);
 	sofar += sizeof(*dump_tlv) + tmp;
+#endif
 
 	/* Gather firmware stack dump */
 	tmp = sizeof(crash_data->stack_buf);

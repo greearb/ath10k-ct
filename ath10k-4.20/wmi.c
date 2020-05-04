@@ -4342,7 +4342,8 @@ static void ath10k_dfs_radar_report(struct ath10k *ar,
 
 radar_detected:
 
-#ifdef ATH_HAVE_PULSE_EVENT_MSG /* so we can compile out-of-tree easier */
+/* so we can compile out-of-tree easier */
+#if defined(ATH_HAVE_PULSE_EVENT_MSG) && defined(CONFIG_ATH10K_DEBUGFS)
 	if (pe.msg[0]) {
 		strncpy(ar->debug.dfs_last_msg, pe.msg,
 			sizeof(ar->debug.dfs_last_msg));

@@ -4128,12 +4128,14 @@ radar_detected:
 
 #ifdef ATH_HAVE_PULSE_EVENT_MSG /* so we can compile out-of-tree easier */
 	ath10k_dbg(ar, ATH10K_DBG_REGULATORY, "dfs radar detected: %s\n", pe.msg);
+# ifdef CONFIG_ATH10K_DEBUGFS
 	if (pe.msg[0]) {
 		strncpy(ar->debug.dfs_last_msg, pe.msg,
 			sizeof(ar->debug.dfs_last_msg));
 		/* ensure null term */
 		ar->debug.dfs_last_msg[sizeof(ar->debug.dfs_last_msg) - 1] = 0;
 	}
+# endif
 #else
 	ath10k_dbg(ar, ATH10K_DBG_REGULATORY, "dfs radar detected\n");
 #endif
