@@ -1784,7 +1784,7 @@ static int ath10k_pci_set_ram_config(struct ath10k *ar, u32 config)
 	return 0;
 }
 
-/* if an error happened returns < 0, otherwise the length */
+/* Always returns the length */
 static int ath10k_pci_dump_memory_sram(struct ath10k *ar,
 				       const struct ath10k_mem_region *region,
 				       u8 *buf)
@@ -2913,35 +2913,31 @@ static void ath10k_pci_warm_reset_cpu(struct ath10k *ar)
 
 	ath10k_pci_write32(ar, FW_INDICATOR_ADDRESS, 0);
 
-	val = ath10k_pci_read32(ar, RTC_SOC_BASE_ADDRESS +
-				SOC_RESET_CONTROL_ADDRESS);
-	ath10k_pci_write32(ar, RTC_SOC_BASE_ADDRESS + SOC_RESET_CONTROL_ADDRESS,
-			   val | SOC_RESET_CONTROL_CPU_WARM_RST_MASK);
+	val = ath10k_pci_soc_read32(ar, SOC_RESET_CONTROL_ADDRESS);
+	ath10k_pci_soc_write32(ar, SOC_RESET_CONTROL_ADDRESS,
+			       val | SOC_RESET_CONTROL_CPU_WARM_RST_MASK);
 }
 
 static void ath10k_pci_warm_reset_ce(struct ath10k *ar)
 {
 	u32 val;
 
-	val = ath10k_pci_read32(ar, RTC_SOC_BASE_ADDRESS +
-				SOC_RESET_CONTROL_ADDRESS);
+	val = ath10k_pci_soc_read32(ar, SOC_RESET_CONTROL_ADDRESS);
 
-	ath10k_pci_write32(ar, RTC_SOC_BASE_ADDRESS + SOC_RESET_CONTROL_ADDRESS,
-			   val | SOC_RESET_CONTROL_CE_RST_MASK);
+	ath10k_pci_soc_write32(ar, SOC_RESET_CONTROL_ADDRESS,
+			       val | SOC_RESET_CONTROL_CE_RST_MASK);
 	msleep(10);
-	ath10k_pci_write32(ar, RTC_SOC_BASE_ADDRESS + SOC_RESET_CONTROL_ADDRESS,
-			   val & ~SOC_RESET_CONTROL_CE_RST_MASK);
+	ath10k_pci_soc_write32(ar, SOC_RESET_CONTROL_ADDRESS,
+			       val & ~SOC_RESET_CONTROL_CE_RST_MASK);
 }
 
 static void ath10k_pci_warm_reset_clear_lf(struct ath10k *ar)
 {
 	u32 val;
 
-	val = ath10k_pci_read32(ar, RTC_SOC_BASE_ADDRESS +
-				SOC_LF_TIMER_CONTROL0_ADDRESS);
-	ath10k_pci_write32(ar, RTC_SOC_BASE_ADDRESS +
-			   SOC_LF_TIMER_CONTROL0_ADDRESS,
-			   val & ~SOC_LF_TIMER_CONTROL0_ENABLE_MASK);
+	val = ath10k_pci_soc_read32(ar, SOC_LF_TIMER_CONTROL0_ADDRESS);
+	ath10k_pci_soc_write32(ar, SOC_LF_TIMER_CONTROL0_ADDRESS,
+			       val & ~SOC_LF_TIMER_CONTROL0_ENABLE_MASK);
 }
 
 static int ath10k_pci_warm_reset(struct ath10k *ar)
@@ -3863,7 +3859,7 @@ static int __ath10k_pci_probe(struct pci_dev *pdev,
 	int (*pci_hard_reset)(struct ath10k *ar);
 	u32 (*targ_cpu_to_ce_addr)(struct ath10k *ar, u32 addr);
 
-	printk(KERN_INFO "ath10k 5.4 driver, optimized for CT firmware, probing pci device: 0x%x.\n",
+	printk(KERN_INFO "ath10k 5.1 driver, optimized for CT firmware, probing pci device: 0x%x.\n",
 	       pci_dev->device);
 
 	switch (pci_dev->device) {

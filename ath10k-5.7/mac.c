@@ -12,6 +12,7 @@
 #include <linux/etherdevice.h>
 #include <linux/acpi.h>
 #include <linux/of.h>
+#include <linux/bitfield.h>
 #include <linux/module.h>
 
 #include "hif.h"
@@ -379,6 +380,7 @@ static int ath10k_send_key(struct ath10k_vif *arvif,
 	case WLAN_CIPHER_SUITE_GCMP:
 	case WLAN_CIPHER_SUITE_GCMP_256:
 		arg.key_cipher = ar->wmi_key_cipher[WMI_CIPHER_AES_GCM];
+		key->flags |= IEEE80211_KEY_FLAG_GENERATE_IV_MGMT;
 		break;
 	case WLAN_CIPHER_SUITE_BIP_GMAC_128:
 	case WLAN_CIPHER_SUITE_BIP_GMAC_256:
@@ -1297,7 +1299,7 @@ static int ath10k_monitor_vdev_stop(struct ath10k *ar)
 
 	ret = ath10k_wmi_vdev_stop(ar, ar->monitor_vdev_id);
 	if (ret)
-		ath10k_warn(ar, "failed to to request monitor vdev %i stop: %d\n",
+		ath10k_warn(ar, "failed to request monitor vdev %i stop: %d\n",
 			    ar->monitor_vdev_id, ret);
 
 	ret = ath10k_vdev_setup_sync(ar);
@@ -3350,7 +3352,7 @@ static int ath10k_setup_peer_smps(struct ath10k *ar, struct ath10k_vif *arvif,
 		return -EINVAL;
 
 	return ath10k_wmi_peer_set_param(ar, arvif->vdev_id, addr,
-					 WMI_PEER_SMPS_STATE,
+					 ar->wmi.peer_param->smps_state,
 					 ath10k_smps_map[smps]);
 }
 
@@ -3507,7 +3509,7 @@ static void ath10k_bss_assoc(struct ieee80211_hw *hw,
 	 * poked with peer param command.
 	 */
 	ret = ath10k_wmi_peer_set_param(ar, arvif->vdev_id, arvif->bssid,
-					WMI_PEER_DUMMY_VAR, 1);
+					ar->wmi.peer_param->dummy_var, 1);
 	if (ret) {
 		ath10k_warn(ar, "failed to poke peer %pM param for ps workaround on vdev %i: %d\n",
 			    arvif->bssid, arvif->vdev_id, ret);
@@ -4333,6 +4335,7 @@ static void ath10k_tx_h_add_p2p_noa_ie(struct ath10k *ar,
 static void ath10k_mac_tx_h_fill_cb(struct ath10k *ar,
 				    struct ieee80211_vif *vif,
 				    struct ieee80211_txq *txq,
+				    struct ieee80211_sta *sta,
 				    struct sk_buff *skb, u16 airtime)
 {
 	struct ieee80211_hdr *hdr = (void *)skb->data;
@@ -4340,6 +4343,7 @@ static void ath10k_mac_tx_h_fill_cb(struct ath10k *ar,
 	const struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
 	bool is_data = ieee80211_is_data(hdr->frame_control) ||
 			ieee80211_is_data_qos(hdr->frame_control);
+	struct ath10k_sta *arsta;
 
 	cb->flags = 0;
 	if (!ath10k_tx_h_use_hwcrypto(vif, skb))
@@ -4364,6 +4368,12 @@ static void ath10k_mac_tx_h_fill_cb(struct ath10k *ar,
 	cb->vif = vif;
 	cb->txq = txq;
 	cb->airtime_est = airtime;
+	if (sta) {
+		arsta = (struct ath10k_sta *)sta->drv_priv;
+		spin_lock_bh(&ar->data_lock);
+		cb->ucast_cipher = arsta->ucast_cipher;
+		spin_unlock_bh(&ar->data_lock);
+	}
 }
 
 bool ath10k_mac_tx_frm_has_freq(struct ath10k *ar)
@@ -4763,38 +4773,6 @@ struct ieee80211_txq *ath10k_mac_txq_lookup(struct ath10k *ar,
 		return NULL;
 }
 
-void ath10k_mac_print_txq_info(struct ath10k *ar, u16 peer_id, u8 tid)
-{
-	struct ath10k_peer *peer;
-
-	lockdep_assert_held(&ar->data_lock);
-
-	peer = ar->peer_map[peer_id];
-	if (!peer) {
-		ath10k_warn(ar, "Could not find peer for peer id %d\n", peer_id);
-		return;
-	}
-
-	if (peer->removed) {
-		ath10k_warn(ar, "peer->removed is true, peer: %p id %d\n", peer, peer_id);
-		return;
-	}
-
-	if (peer->sta) {
-		if (!peer->sta->txq[tid]) {
-			ath10k_warn(ar, "peer->sta->txq[%d] is NULL, id %d\n", tid, peer_id);
-		}
-	}
-	else if (peer->vif) {
-		if (!peer->vif->txq) {
-			ath10k_warn(ar, "peer->vif->txq is NULL, id %d\n", peer_id);
-		}
-	}
-	else {
-		ath10k_warn(ar, "Both peer->sta and peer->vif are NULL, id %d\n", peer_id);
-	}
-}
-
 static bool ath10k_mac_tx_can_push(struct ieee80211_hw *hw,
 				   struct ieee80211_txq *txq)
 {
@@ -4884,36 +4862,7 @@ int ath10k_mac_tx_push_txq(struct ieee80211_hw *hw,
 	if (ret)
 		return ret;
 
-	/* Add debugging for this crash Brent saw in station reset test */
-	/* FW crashed, then kernel */
-	/*
-	Call Trace:
- <IRQ>
- ? dma_pte_clear_level+0x111/0x190
- ? dma_pte_clear_level+0x111/0x190
- ath10k_mac_tx_push_txq+0x6f/0x210 [ath10k_core]  # Decodes to the:  if (!skb) line below
- ath10k_mac_tx_push_pending+0x154/0x1e0 [ath10k_core]
- ath10k_htt_txrx_compl_task+0xede/0x1780 [ath10k_core]
- ? ath10k_htc_process_trailer+0x300/0x300 [ath10k_core]
- ? ath10k_ce_per_engine_service+0xc9/0xe0 [ath10k_pci]
- ? ath10k_bus_pci_write32+0x3c/0xa0 [ath10k_pci]
- ath10k_pci_napi_poll+0x44/0xe0 [ath10k_pci]
- net_rx_action+0x250/0x3b0
- __do_softirq+0xc2/0x2a3
- irq_exit+0x7d/0x80
- do_IRQ+0x45/0xc0
- common_interrupt+0xf/0xf
-		*/
-	if (WARN_ON(((unsigned long)(txq)) < 4000))
-		return -ENOENT;
-	if (WARN_ON(((unsigned long)(hw)) < 4000))
-		return -ENOENT;
-
-	skb = ieee80211_tx_dequeue(hw, txq);
-
-	if (WARN_ON((((unsigned long)(skb)) < 4000) && (((unsigned long)(skb)) > 0)))
-		return -ENOENT;
-
+	skb = ieee80211_tx_dequeue_ni(hw, txq);
 	if (!skb) {
 		spin_lock_bh(&ar->htt.tx_lock);
 		ath10k_htt_tx_dec_pending(htt);
@@ -4923,7 +4872,7 @@ int ath10k_mac_tx_push_txq(struct ieee80211_hw *hw,
 	}
 
 	airtime = ath10k_mac_update_airtime(ar, txq, skb);
-	ath10k_mac_tx_h_fill_cb(ar, vif, txq, skb, airtime);
+	ath10k_mac_tx_h_fill_cb(ar, vif, txq, sta, skb, airtime);
 
 	skb_len = skb->len;
 	txmode = ath10k_mac_tx_h_get_txmode(ar, vif, sta, skb);
@@ -5222,7 +5171,7 @@ static void ath10k_mac_op_tx(struct ieee80211_hw *hw,
 	u16 airtime;
 
 	airtime = ath10k_mac_update_airtime(ar, txq, skb);
-	ath10k_mac_tx_h_fill_cb(ar, vif, txq, skb, airtime);
+	ath10k_mac_tx_h_fill_cb(ar, vif, txq, sta, skb, airtime);
 
 	txmode = ath10k_mac_tx_h_get_txmode(ar, vif, sta, skb);
 	txpath = ath10k_mac_tx_h_get_txpath(ar, skb, txmode);
@@ -5640,6 +5589,63 @@ static int __ath10k_fetch_bb_timing_dt(struct ath10k *ar,
 	return 0;
 }
 
+static int ath10k_mac_rfkill_config(struct ath10k *ar)
+{
+	u32 param;
+	int ret;
+
+	if (ar->hw_values->rfkill_pin == 0) {
+		ath10k_warn(ar, "ath10k does not support hardware rfkill with this device\n");
+		return -EOPNOTSUPP;
+	}
+
+	ath10k_dbg(ar, ATH10K_DBG_MAC,
+		   "mac rfkill_pin %d rfkill_cfg %d rfkill_on_level %d",
+		   ar->hw_values->rfkill_pin, ar->hw_values->rfkill_cfg,
+		   ar->hw_values->rfkill_on_level);
+
+	param = FIELD_PREP(WMI_TLV_RFKILL_CFG_RADIO_LEVEL,
+			   ar->hw_values->rfkill_on_level) |
+		FIELD_PREP(WMI_TLV_RFKILL_CFG_GPIO_PIN_NUM,
+			   ar->hw_values->rfkill_pin) |
+		FIELD_PREP(WMI_TLV_RFKILL_CFG_PIN_AS_GPIO,
+			   ar->hw_values->rfkill_cfg);
+
+	ret = ath10k_wmi_pdev_set_param(ar,
+					ar->wmi.pdev_param->rfkill_config,
+					param);
+	if (ret) {
+		ath10k_warn(ar,
+			    "failed to set rfkill config 0x%x: %d\n",
+			    param, ret);
+		return ret;
+	}
+	return 0;
+}
+
+int ath10k_mac_rfkill_enable_radio(struct ath10k *ar, bool enable)
+{
+	enum wmi_tlv_rfkill_enable_radio param;
+	int ret;
+
+	if (enable)
+		param = WMI_TLV_RFKILL_ENABLE_RADIO_ON;
+	else
+		param = WMI_TLV_RFKILL_ENABLE_RADIO_OFF;
+
+	ath10k_dbg(ar, ATH10K_DBG_MAC, "mac rfkill enable %d", param);
+
+	ret = ath10k_wmi_pdev_set_param(ar, ar->wmi.pdev_param->rfkill_enable,
+					param);
+	if (ret) {
+		ath10k_warn(ar, "failed to set rfkill enable param %d: %d\n",
+			    param, ret);
+		return ret;
+	}
+
+	return 0;
+}
+
 static int ath10k_start(struct ieee80211_hw *hw)
 {
 	struct ath10k *ar = hw->priv;
@@ -5674,6 +5680,16 @@ static int ath10k_start(struct ieee80211_hw *hw)
 		goto err;
 	}
 
+	spin_lock_bh(&ar->data_lock);
+
+	if (ar->hw_rfkill_on) {
+		ar->hw_rfkill_on = false;
+		spin_unlock_bh(&ar->data_lock);
+		goto err;
+	}
+
+	spin_unlock_bh(&ar->data_lock);
+
 	ret = ath10k_hif_power_up(ar, ATH10K_FIRMWARE_MODE_NORMAL);
 	if (ret) {
 		ath10k_err(ar, "Could not init hif: %d\n", ret);
@@ -5685,6 +5701,14 @@ static int ath10k_start(struct ieee80211_hw *hw)
 	if (ret) {
 		ath10k_err(ar, "Could not init core: %d\n", ret);
 		goto err_power_down;
+	}
+
+	if (ar->sys_cap_info & WMI_TLV_SYS_CAP_INFO_RFKILL) {
+		ret = ath10k_mac_rfkill_config(ar);
+		if (ret && ret != -EOPNOTSUPP) {
+			ath10k_warn(ar, "failed to configure rfkill: %d", ret);
+			goto err_core_stop;
+		}
 	}
 
 	param = ar->wmi.pdev_param->pmf_qos;
@@ -5790,7 +5814,8 @@ static int ath10k_start(struct ieee80211_hw *hw)
 	param = ar->wmi.pdev_param->enable_btcoex;
 	if (test_bit(WMI_SERVICE_COEX_GPIO, ar->wmi.svc_map) &&
 	    test_bit(ATH10K_FW_FEATURE_BTCOEX_PARAM,
-		     ar->running_fw->fw_file.fw_features)) {
+		     ar->running_fw->fw_file.fw_features) &&
+	    ar->coex_support) {
 		ret = ath10k_wmi_pdev_set_param(ar, param, 0);
 		if (ret) {
 			ath10k_warn(ar,
@@ -5846,7 +5871,8 @@ static void ath10k_stop(struct ieee80211_hw *hw)
 
 	mutex_lock(&ar->conf_mutex);
 	if (ar->state != ATH10K_STATE_OFF) {
-		ath10k_halt(ar);
+		if (!ar->hw_rfkill_on)
+			ath10k_halt(ar);
 		ar->state = ATH10K_STATE_OFF;
 	}
 	mutex_unlock(&ar->conf_mutex);
@@ -6573,6 +6599,37 @@ static void ath10k_configure_filter(struct ieee80211_hw *hw,
 	mutex_unlock(&ar->conf_mutex);
 }
 
+static void ath10k_recalculate_mgmt_rate(struct ath10k *ar,
+					 struct ieee80211_vif *vif,
+					 struct cfg80211_chan_def *def)
+{
+	struct ath10k_vif *arvif = (void *)vif->drv_priv;
+	const struct ieee80211_supported_band *sband;
+	u8 basic_rate_idx;
+	int hw_rate_code;
+	u32 vdev_param;
+	u16 bitrate;
+	int ret;
+
+	lockdep_assert_held(&ar->conf_mutex);
+
+	sband = ar->hw->wiphy->bands[def->chan->band];
+	basic_rate_idx = ffs(vif->bss_conf.basic_rates) - 1;
+	bitrate = sband->bitrates[basic_rate_idx].bitrate;
+
+	hw_rate_code = ath10k_mac_get_rate_hw_value(bitrate);
+	if (hw_rate_code < 0) {
+		ath10k_warn(ar, "bitrate not supported %d\n", bitrate);
+		return;
+	}
+
+	vdev_param = ar->wmi.vdev_param->mgmt_rate;
+	ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id, vdev_param,
+					hw_rate_code);
+	if (ret)
+		ath10k_warn(ar, "failed to set mgmt tx rate %d\n", ret);
+}
+
 static void ath10k_bss_info_changed(struct ieee80211_hw *hw,
 				    struct ieee80211_vif *vif,
 				    struct ieee80211_bss_conf *info,
@@ -6583,10 +6640,9 @@ static void ath10k_bss_info_changed(struct ieee80211_hw *hw,
 	struct cfg80211_chan_def def;
 	u32 vdev_param, pdev_param, slottime, preamble;
 	u16 bitrate, hw_value;
-	u8 rate, basic_rate_idx, rateidx;
-	int ret = 0, hw_rate_code, mcast_rate;
+	u8 rate, rateidx;
+	int ret = 0, mcast_rate;
 	enum nl80211_band band;
-	const struct ieee80211_supported_band *sband;
 
 	mutex_lock(&ar->conf_mutex);
 
@@ -6810,29 +6866,9 @@ static void ath10k_bss_info_changed(struct ieee80211_hw *hw,
 				    arvif->vdev_id,  ret);
 	}
 
-	if (changed & BSS_CHANGED_BASIC_RATES) {
-		if (ath10k_mac_vif_chan(vif, &def)) {
-			mutex_unlock(&ar->conf_mutex);
-			return;
-		}
-
-		sband = ar->hw->wiphy->bands[def.chan->band];
-		basic_rate_idx = ffs(vif->bss_conf.basic_rates) - 1;
-		bitrate = sband->bitrates[basic_rate_idx].bitrate;
-
-		hw_rate_code = ath10k_mac_get_rate_hw_value(bitrate);
-		if (hw_rate_code < 0) {
-			ath10k_warn(ar, "bitrate not supported %d\n", bitrate);
-			mutex_unlock(&ar->conf_mutex);
-			return;
-		}
-
-		vdev_param = ar->wmi.vdev_param->mgmt_rate;
-		ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id, vdev_param,
-						hw_rate_code);
-		if (ret)
-			ath10k_warn(ar, "failed to set mgmt tx rate %d\n", ret);
-	}
+	if (changed & BSS_CHANGED_BASIC_RATES &&
+	    !ath10k_mac_vif_chan(arvif->vif, &def))
+		ath10k_recalculate_mgmt_rate(ar, vif, &def);
 
 	mutex_unlock(&ar->conf_mutex);
 }
@@ -7099,6 +7135,7 @@ static int ath10k_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 {
 	struct ath10k *ar = hw->priv;
 	struct ath10k_vif *arvif = (void *)vif->drv_priv;
+	struct ath10k_sta *arsta;
 	struct ath10k_peer *peer;
 	const u8 *peer_addr;
 	bool is_wep = key->cipher == WLAN_CIPHER_SUITE_WEP40 ||
@@ -7127,12 +7164,17 @@ static int ath10k_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 
 	mutex_lock(&ar->conf_mutex);
 
-	if (sta)
+	if (sta) {
+		arsta = (struct ath10k_sta *)sta->drv_priv;
 		peer_addr = sta->addr;
-	else if (arvif->vdev_type == WMI_VDEV_TYPE_STA)
+		spin_lock_bh(&ar->data_lock);
+		arsta->ucast_cipher = key->cipher;
+		spin_unlock_bh(&ar->data_lock);
+	} else if (arvif->vdev_type == WMI_VDEV_TYPE_STA) {
 		peer_addr = vif->bss_conf.bssid;
-	else
+	} else {
 		peer_addr = vif->addr;
+	}
 
 	key->hw_key_idx = key->keyidx;
 
@@ -7236,7 +7278,10 @@ static int ath10k_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 
 	if (sta && sta->tdls)
 		ath10k_wmi_peer_set_param(ar, arvif->vdev_id, sta->addr,
-					  WMI_PEER_AUTHORIZE, 1);
+					  ar->wmi.peer_param->authorize, 1);
+	else if (sta && cmd == SET_KEY && (key->flags & IEEE80211_KEY_FLAG_PAIRWISE))
+		ath10k_wmi_peer_set_param(ar, arvif->vdev_id, peer_addr,
+					  ar->wmi.peer_param->authorize, 1);
 
 exit:
 	mutex_unlock(&ar->conf_mutex);
@@ -7327,7 +7372,7 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 			   sta->addr, bw, mode);
 
 		err = ath10k_wmi_peer_set_param(ar, arvif->vdev_id, sta->addr,
-						WMI_PEER_PHYMODE, mode);
+						ar->wmi.peer_param->phymode, mode);
 		if (err) {
 			ath10k_warn(ar, "failed to update STA %pM peer phymode %d: %d\n",
 				    sta->addr, mode, err);
@@ -7335,7 +7380,7 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 		}
 
 		err = ath10k_wmi_peer_set_param(ar, arvif->vdev_id, sta->addr,
-						WMI_PEER_CHAN_WIDTH, bw);
+						ar->wmi.peer_param->chan_width, bw);
 		if (err)
 			ath10k_warn(ar, "failed to update STA %pM peer bw %d: %d\n",
 				    sta->addr, bw, err);
@@ -7346,7 +7391,7 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 			   sta->addr, nss);
 
 		err = ath10k_wmi_peer_set_param(ar, arvif->vdev_id, sta->addr,
-						WMI_PEER_NSS, nss);
+						ar->wmi.peer_param->nss, nss);
 		if (err)
 			ath10k_warn(ar, "failed to update STA %pM nss %d: %d\n",
 				    sta->addr, nss, err);
@@ -7357,7 +7402,7 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 			   sta->addr, smps);
 
 		err = ath10k_wmi_peer_set_param(ar, arvif->vdev_id, sta->addr,
-						WMI_PEER_SMPS_STATE, smps);
+						ar->wmi.peer_param->smps_state, smps);
 		if (err)
 			ath10k_warn(ar, "failed to update STA %pM smps %d: %d\n",
 				    sta->addr, smps, err);
@@ -7431,7 +7476,7 @@ static int ath10k_sta_set_txpwr(struct ieee80211_hw *hw,
 	mutex_lock(&ar->conf_mutex);
 
 	ret = ath10k_wmi_peer_set_param(ar, arvif->vdev_id, sta->addr,
-					WMI_PEER_USE_FIXED_PWR, txpwr);
+					ar->wmi.peer_param->use_fixed_power, txpwr);
 	if (ret) {
 		ath10k_warn(ar, "failed to set tx power for station ret: %d\n",
 			    ret);
@@ -7512,6 +7557,7 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 			arsta->tx_stats = kzalloc(sizeof(*arsta->tx_stats),
 						  GFP_KERNEL);
 			if (!arsta->tx_stats) {
+				ath10k_mac_dec_num_stations(arvif, sta);
 				ret = -ENOMEM;
 				goto exit;
 			}
@@ -8041,110 +8087,110 @@ static int ath10k_mac_op_set_frag_threshold(struct ieee80211_hw *hw, u32 value)
 
 void ath10k_mac_wait_tx_complete(struct ath10k *ar)
 {
-	bool skip;
-	long time_left;
-	int pending_tx = 0;
+        bool skip;
+        long time_left;
+        int pending_tx = 0;
 
-	time_left = wait_event_timeout(ar->htt.empty_tx_wq, ({
-			bool empty;
+        time_left = wait_event_timeout(ar->htt.empty_tx_wq, ({
+                        bool empty;
 
-			spin_lock_bh(&ar->htt.tx_lock);
-			pending_tx = ar->htt.num_pending_tx;
-			empty = (pending_tx == 0);
-			spin_unlock_bh(&ar->htt.tx_lock);
+                        spin_lock_bh(&ar->htt.tx_lock);
+                        pending_tx = ar->htt.num_pending_tx;
+                        empty = (pending_tx == 0);
+                        spin_unlock_bh(&ar->htt.tx_lock);
 
-			skip = (ar->state == ATH10K_STATE_WEDGED) ||
-			       test_bit(ATH10K_FLAG_CRASH_FLUSH,
-					&ar->dev_flags);
+                        skip = (ar->state == ATH10K_STATE_WEDGED) ||
+                               test_bit(ATH10K_FLAG_CRASH_FLUSH,
+                                        &ar->dev_flags);
 
-			(empty || skip);
-		}), ATH10K_FLUSH_TIMEOUT_HZ);
+                        (empty || skip);
+                }), ATH10K_FLUSH_TIMEOUT_HZ);
 
-	if (time_left == 0 || skip)
-		ath10k_warn(ar, "failed to flush transmit queue (skip %i ar-state %i pending-tx %d): %ld\n",
-			    skip, ar->state, pending_tx, time_left);
+        if (time_left == 0 || skip)
+                ath10k_warn(ar, "failed to flush transmit queue (skip %i ar-state %i pending-tx %d): %ld\n",
+                            skip, ar->state, pending_tx, time_left);
 }
 
 static void ath10k_flush(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
-			 u32 queues, bool drop)
+                         u32 queues, bool drop)
 {
-	struct ath10k *ar = hw->priv;
-	struct ath10k_vif *arvif = NULL;
-	u8 peer_addr[ETH_ALEN] = {0};
-	u32 bitmap;
-	u32 vid = 0xFFFFFFFF;
+        struct ath10k *ar = hw->priv;
+        struct ath10k_vif *arvif = NULL;
+        u8 peer_addr[ETH_ALEN] = {0};
+        u32 bitmap;
+        u32 vid = 0xFFFFFFFF;
 
-	mutex_lock(&ar->conf_mutex);
+        mutex_lock(&ar->conf_mutex);
 
-	if (ar->state == ATH10K_STATE_WEDGED)
-		goto skip;
+        if (ar->state == ATH10K_STATE_WEDGED)
+                goto skip;
 
-	if (vif) {
-		arvif = (void *)vif->drv_priv;
-		vid = arvif->vdev_id;
-		ath10k_info(ar, "mac flush vdev %d drop %d queues 0x%x ar->paused: 0x%lx  arvif->paused: 0x%lx\n",
-			    arvif->vdev_id, drop, queues, ar->tx_paused, arvif->tx_paused);
-	}
-	else {
-		ath10k_info(ar, "mac flush null vif, drop %d queues 0x%x\n",
-			    drop, queues);
-	}
+        if (vif) {
+                arvif = (void *)vif->drv_priv;
+                vid = arvif->vdev_id;
+                ath10k_info(ar, "mac flush vdev %d drop %d queues 0x%x ar->paused: 0x%lx  arvif->paused: 0x%lx\n",
+                            arvif->vdev_id, drop, queues, ar->tx_paused, arvif->tx_paused);
+        }
+        else {
+                ath10k_info(ar, "mac flush null vif, drop %d queues 0x%x\n",
+                            drop, queues);
+        }
 
 
-	/* NOTE:  As of Aug 10, CT firmware supports flushing a single vdev
-	 * by passing the vdev_id, and leaving peer_addr all zeros.  But the logic
-	 * below would need to be changed to check if all pkts for a particular
-	 * vdev have been flushed instead of the entire tx-q being flushed.
-	 *
-	 * In addition, this logic could be called even if 'drop' is requested.
-	 * This might make the system act more optimally.
-	 *
-	 * --Ben
-	 */
+        /* NOTE:  As of Aug 10, CT firmware supports flushing a single vdev
+         * by passing the vdev_id, and leaving peer_addr all zeros.  But the logic
+         * below would need to be changed to check if all pkts for a particular
+         * vdev have been flushed instead of the entire tx-q being flushed.
+         *
+         * In addition, this logic could be called even if 'drop' is requested.
+         * This might make the system act more optimally.
+         *
+         * --Ben
+         */
 
-	/* If we are CT firmware, ask it to flush all tids on all peers on
-	 * all vdevs.  Normal firmware will just crash if you do this.
-	 */
-	if (test_bit(ATH10K_FW_FEATURE_FLUSH_ALL_CT,
+        /* If we are CT firmware, ask it to flush all tids on all peers on
+         * all vdevs.  Normal firmware will just crash if you do this.
+         */
+        if (test_bit(ATH10K_FW_FEATURE_FLUSH_ALL_CT,
 		     ar->running_fw->fw_file.fw_features)) {
-		ath10k_wmi_peer_flush(ar, vid, peer_addr, 0xFFFFFFFF);
-		/* I am not sure the wave-2 push-tx logic works right with
-		 * flushing, so just bail out after making the proper
-		 * request to firmware.  From comment above, I guess this is just
-		 * like dropping all frames anyway.
-		 */
-		if (drop || test_bit(ATH10K_FW_FEATURE_PEER_FLOW_CONTROL,
-				     ar->running_fw->fw_file.fw_features))
-			goto skip;
+                ath10k_wmi_peer_flush(ar, vid, peer_addr, 0xFFFFFFFF);
+                /* I am not sure the wave-2 push-tx logic works right with
+                 * flushing, so just bail out after making the proper
+                 * request to firmware.  From comment above, I guess this is just
+                 * like dropping all frames anyway.
+                 */
+                if (drop || test_bit(ATH10K_FW_FEATURE_PEER_FLOW_CONTROL,
+                                     ar->running_fw->fw_file.fw_features))
+                        goto skip;
 
-		/* I cannot find a good way to know if an individual vdev is flushed or
-		 * not.  So, if that is being requested, just skip the wait.
-		 */
-		if (arvif)
-			goto skip;
+                /* I cannot find a good way to know if an individual vdev is flushed or
+                 * not.  So, if that is being requested, just skip the wait.
+                 */
+                if (arvif)
+                        goto skip;
 
-	}
-	else if (drop) {
-		/* Upstream QCA firmware can handle this I guess...seems weird logic
-		 * though...not paying attention to specific thing to flush?
-		 * --Ben
-		 */
-		if (vif && vif->type == NL80211_IFTYPE_STATION) {
-			bitmap = ~(1 << WMI_MGMT_TID);
-			list_for_each_entry(arvif, &ar->arvifs, list) {
-				if (arvif->vdev_type == WMI_VDEV_TYPE_STA)
-					ath10k_wmi_peer_flush(ar, arvif->vdev_id,
-							      arvif->bssid, bitmap);
-			}
-		}
-		goto skip;
-	}
+        }
+        else if (drop) {
+               /* Upstream QCA firmware can handle this I guess...seems weird logic
+                 * though...not paying attention to specific thing to flush?
+                 * --Ben
+                 */
+                if (vif && vif->type == NL80211_IFTYPE_STATION) {
+                        bitmap = ~(1 << WMI_MGMT_TID);
+                        list_for_each_entry(arvif, &ar->arvifs, list) {
+                                if (arvif->vdev_type == WMI_VDEV_TYPE_STA)
+                                        ath10k_wmi_peer_flush(ar, arvif->vdev_id,
+                                                              arvif->bssid, bitmap);
+                        }
+                }
+                goto skip;
+        }
 
-	/* Wait for entire tx-q to finish transmitting */
-	ath10k_mac_wait_tx_complete(ar);
+        /* Wait for entire tx-q to finish transmitting */
+        ath10k_mac_wait_tx_complete(ar);
 
 skip:
-	mutex_unlock(&ar->conf_mutex);
+        mutex_unlock(&ar->conf_mutex);
 }
 
 /* TODO: Implement this function properly
@@ -8487,7 +8533,7 @@ static bool ath10k_mac_set_vht_bitrate_mask_fixup(struct ath10k *ar,
 	err = ath10k_wmi_peer_set_param(ar, arvif->vdev_id, sta->addr,
 					WMI_PEER_PARAM_FIXED_RATE, rate);
 	if (err)
-		ath10k_warn(ar, "failed to eanble STA %pM peer fixed rate: %d\n",
+		ath10k_warn(ar, "failed to enable STA %pM peer fixed rate: %d\n",
 			    sta->addr, err);
 
 	return true;
@@ -9485,8 +9531,6 @@ struct ath10k *ath10k_mac_create(size_t priv_size)
 		return NULL;
 	}
 
-	pr_err("ath10k_mac_create, priv_size: %lu  hw: %p  hw->priv: %p\n",
-	       (unsigned long)(priv_size), hw, hw->priv);
 	ar = hw->priv;
 	ar->hw = hw;
 	ar->ops = ops;
@@ -9581,6 +9625,8 @@ static struct ieee80211_iface_combination ath10k_10x_if_comb[] = {
 		.radar_detect_widths =	BIT(NL80211_CHAN_WIDTH_20_NOHT) |
 					BIT(NL80211_CHAN_WIDTH_20) |
 					BIT(NL80211_CHAN_WIDTH_40) |
+					BIT(NL80211_CHAN_WIDTH_80P80) | /* TODO:  Verify --Ben */
+					BIT(NL80211_CHAN_WIDTH_160) | /* TODO:  Verify --Ben */
 					BIT(NL80211_CHAN_WIDTH_80),
 #endif
 	},
@@ -9722,8 +9768,6 @@ static const struct ieee80211_iface_combination ath10k_10_4_if_comb[] = {
 		.radar_detect_widths =	BIT(NL80211_CHAN_WIDTH_20_NOHT) |
 					BIT(NL80211_CHAN_WIDTH_20) |
 					BIT(NL80211_CHAN_WIDTH_40) |
-					BIT(NL80211_CHAN_WIDTH_80P80) | /* TODO:  Verify --Ben */
-					BIT(NL80211_CHAN_WIDTH_160) | /* TODO:  Verify --Ben */
 					BIT(NL80211_CHAN_WIDTH_80),
 #endif
 	},
@@ -10128,6 +10172,7 @@ int ath10k_mac_register(struct ath10k *ar)
 			WMI_PNO_MAX_SCHED_SCAN_PLAN_INT;
 		ar->hw->wiphy->max_sched_scan_plan_iterations =
 			WMI_PNO_MAX_SCHED_SCAN_PLAN_ITRNS;
+		ar->hw->wiphy->features |= NL80211_FEATURE_ND_RANDOM_MAC_ADDR;
 	}
 
 	ar->hw->vif_data_size = sizeof(struct ath10k_vif);
@@ -10178,6 +10223,7 @@ int ath10k_mac_register(struct ath10k *ar)
 	wiphy_ext_feature_set(ar->hw->wiphy, NL80211_EXT_FEATURE_VHT_IBSS);
 	wiphy_ext_feature_set(ar->hw->wiphy,
 			      NL80211_EXT_FEATURE_SET_SCAN_DWELL);
+	wiphy_ext_feature_set(ar->hw->wiphy, NL80211_EXT_FEATURE_AQL);
 
 	if (test_bit(WMI_SERVICE_TX_DATA_ACK_RSSI, ar->wmi.svc_map) ||
 	    test_bit(WMI_SERVICE_HTT_MGMT_TX_COMP_VALID_FLAGS, ar->wmi.svc_map))
@@ -10237,12 +10283,9 @@ int ath10k_mac_register(struct ath10k *ar)
 			ar->hw->wiphy->interface_modes |= BIT(NL80211_IFTYPE_ADHOC);
 
 			/* CT firmware can do tx-sw-crypt if properly configured */
-			if ((!(test_bit(ATH10K_FW_FEATURE_CT_STA,
-					ar->running_fw->fw_file.fw_features) &&
-			       ar->request_ct_sta)) &&
-			    (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
-				      ar->running_fw->fw_file.fw_features) &&
-			     ar->request_nohwcrypt))
+			if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+				     ar->running_fw->fw_file.fw_features) &&
+			    ath10k_modparam_nohwcrypt)
 				__clear_bit(IEEE80211_HW_SW_CRYPTO_CONTROL, ar->hw->flags);
 		} else {
 			ret = ath10k_copy_comb(ar, ath10k_10x_if_comb,
@@ -10264,9 +10307,12 @@ int ath10k_mac_register(struct ath10k *ar)
 			ar->hw->wiphy->interface_modes |= BIT(NL80211_IFTYPE_ADHOC);
 
 			/* CT firmware can do tx-sw-crypt if properly configured */
-			if (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
-				     ar->running_fw->fw_file.fw_features) &&
-			    ath10k_modparam_nohwcrypt)
+			if ((!(test_bit(ATH10K_FW_FEATURE_CT_STA,
+					ar->running_fw->fw_file.fw_features) &&
+			       ar->request_ct_sta)) &&
+			    (test_bit(ATH10K_FW_FEATURE_CT_RXSWCRYPT,
+				      ar->running_fw->fw_file.fw_features) &&
+			     ar->request_nohwcrypt))
 				__clear_bit(IEEE80211_HW_SW_CRYPTO_CONTROL, ar->hw->flags);
 		} else {
 			ret = ath10k_copy_comb(ar, ath10k_10x_if_comb,
