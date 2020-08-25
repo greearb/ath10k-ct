@@ -180,8 +180,7 @@ struct ath10k_hw_mem_layout {
 /* FIXME: where to put this? */
 extern unsigned long ath10k_coredump_mask;
 
-#ifdef CONFIG_DEV_COREDUMP
-
+#if ((defined CONFIG_DEV_COREDUMP) || defined (CONFIG_ATH10K_DEBUGFS))
 int ath10k_coredump_submit(struct ath10k *ar);
 struct ath10k_fw_crash_data *ath10k_coredump_new(struct ath10k *ar);
 int ath10k_coredump_create(struct ath10k *ar);
@@ -191,7 +190,7 @@ void ath10k_coredump_destroy(struct ath10k *ar);
 
 const struct ath10k_hw_mem_layout *ath10k_coredump_get_mem_layout(struct ath10k *ar);
 
-#else /* CONFIG_DEV_COREDUMP */
+#else /* CONFIG_DEV_COREDUMP || CONFIG_ATH10K_DEBUGFS */
 
 static inline int ath10k_coredump_submit(struct ath10k *ar)
 {

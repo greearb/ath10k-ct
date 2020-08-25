@@ -1467,9 +1467,10 @@ struct ath10k {
 
 	u32 pktlog_filter;
 
-#ifdef CONFIG_DEV_COREDUMP
+#if ((defined CONFIG_DEV_COREDUMP) || defined (CONFIG_ATH10K_DEBUGFS))
 	struct {
 		struct ath10k_fw_crash_data *fw_crash_data;
+		struct ath10k_dump_file_data* dump; /* for debugfs */
 	} coredump;
 #endif
 

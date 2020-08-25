@@ -48,4 +48,9 @@ mkdir -p ./ath10k-$KVER
 cp -ar ~/git/linux-$KVER.dev.y/drivers/net/wireless/ath/ath10k/* ./ath10k-$KVER
 
 
+# And for 5.8 kernel
+KVER=5.8
+mkdir -p ./ath10k-$KVER
+cp -ar ~/git/linux-$KVER.dev.y/drivers/net/wireless/ath/ath10k/* ./ath10k-$KVER
+
 

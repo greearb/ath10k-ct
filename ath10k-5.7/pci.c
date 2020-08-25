@@ -2406,6 +2406,8 @@ static void ath10k_pci_hif_stop(struct ath10k *ar)
 		ar->napi_enabled = false;
 	}
 
+	cancel_work_sync(&ar_pci->dump_work);
+
 	/* Most likely the device has HTT Rx ring configured. The only way to
 	 * prevent the device from accessing (and possible corrupting) host
 	 * memory is to reset the chip now.

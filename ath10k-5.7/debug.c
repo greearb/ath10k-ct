@@ -16,6 +16,7 @@
 #include "hif.h"
 #include "wmi-ops.h"
 #include "mac.h"
+#include "coredump.h"
 
 /* ms */
 #define ATH10K_DEBUG_HTT_STATS_INTERVAL 1000
@@ -1769,6 +1770,48 @@ static ssize_t ath10k_read_chip_id(struct file *file, char __user *user_buf,
 static const struct file_operations fops_chip_id = {
 	.read = ath10k_read_chip_id,
 	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static int ath10k_fw_crash_dump_open(struct inode *inode, struct file *file)
+{
+	struct ath10k *ar = inode->i_private;
+
+	/*ath10k_warn(ar, "fw_crash_dump debugfs file is deprecated, please use /sys/class/devcoredump instead."); */
+	if (ar->coredump.dump) {
+		file->private_data = ar->coredump.dump;
+		ar->coredump.dump = NULL; /* dump_release will free the mem */
+		return 0;
+	}
+	else {
+		return -ENODATA;
+	}
+}
+
+static ssize_t ath10k_fw_crash_dump_read(struct file *file,
+					 char __user *user_buf,
+					 size_t count, loff_t *ppos)
+{
+	struct ath10k_dump_file_data *dump_file = file->private_data;
+
+	return simple_read_from_buffer(user_buf, count, ppos,
+				       dump_file,
+				       le32_to_cpu(dump_file->len));
+}
+
+static int ath10k_fw_crash_dump_release(struct inode *inode,
+					struct file *file)
+{
+	vfree(file->private_data);
+
+	return 0;
+}
+
+static const struct file_operations fops_fw_crash_dump = {
+	.open = ath10k_fw_crash_dump_open,
+	.read = ath10k_fw_crash_dump_read,
+	.release = ath10k_fw_crash_dump_release,
 	.owner = THIS_MODULE,
 	.llseek = default_llseek,
 };
@@ -4387,6 +4430,9 @@ int ath10k_debug_register(struct ath10k *ar)
 
 	debugfs_create_file("simulate_fw_crash", 0600, ar->debug.debugfs_phy, ar,
 			    &fops_simulate_fw_crash);
+
+	debugfs_create_file("fw_crash_dump", 0400, ar->debug.debugfs_phy, ar,
+			    &fops_fw_crash_dump);
 
 	debugfs_create_file("misc", 0400, ar->debug.debugfs_phy, ar,
 			    &fops_misc);
