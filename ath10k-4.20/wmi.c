@@ -7064,6 +7064,8 @@ static struct sk_buff *ath10k_wmi_op_gen_init(struct ath10k *ar)
 	config.tx_dbg_log_size = __cpu_to_le32(TARGET_TX_DBG_LOG_SIZE);
 	config.num_wds_entries = __cpu_to_le32(TARGET_NUM_WDS_ENTRIES);
 	config.dma_burst_size = __cpu_to_le32(TARGET_DMA_BURST_SIZE);
+	if (ar->fwcfg.flags & ATH10K_FWCFG_DMA_BURST)
+		config.dma_burst_size = cpu_to_le32(ar->fwcfg.dma_burst);
 	config.mac_aggr_delim = __cpu_to_le32(TARGET_MAC_AGGR_DELIM);
 
 	val = TARGET_RX_SKIP_DEFRAG_TIMEOUT_DUP_DETECTION_CHECK;
@@ -7201,6 +7203,8 @@ static struct sk_buff *ath10k_wmi_10_1_op_gen_init(struct ath10k *ar)
 	config.tx_dbg_log_size = __cpu_to_le32(TARGET_10X_TX_DBG_LOG_SIZE);
 	config.num_wds_entries = __cpu_to_le32(TARGET_10X_NUM_WDS_ENTRIES);
 	config.dma_burst_size = __cpu_to_le32(TARGET_10X_DMA_BURST_SIZE);
+	if (ar->fwcfg.flags & ATH10K_FWCFG_DMA_BURST)
+		config.dma_burst_size = cpu_to_le32(ar->fwcfg.dma_burst);
 	config.mac_aggr_delim = __cpu_to_le32(TARGET_10X_MAC_AGGR_DELIM);
 
 	val = TARGET_10X_RX_SKIP_DEFRAG_TIMEOUT_DUP_DETECTION_CHECK;
@@ -7316,6 +7320,8 @@ static struct sk_buff *ath10k_wmi_10_2_op_gen_init(struct ath10k *ar)
 	config.tx_dbg_log_size = __cpu_to_le32(TARGET_10X_TX_DBG_LOG_SIZE);
 	config.num_wds_entries = __cpu_to_le32(TARGET_10X_NUM_WDS_ENTRIES);
 	config.dma_burst_size = __cpu_to_le32(TARGET_10_2_DMA_BURST_SIZE);
+	if (ar->fwcfg.flags & ATH10K_FWCFG_DMA_BURST)
+		config.dma_burst_size = cpu_to_le32(ar->fwcfg.dma_burst);
 	config.mac_aggr_delim = __cpu_to_le32(TARGET_10X_MAC_AGGR_DELIM);
 
 	val = TARGET_10X_RX_SKIP_DEFRAG_TIMEOUT_DUP_DETECTION_CHECK;
@@ -7467,6 +7473,8 @@ static struct sk_buff *ath10k_wmi_10_4_op_gen_init(struct ath10k *ar)
 	config.tx_dbg_log_size  = __cpu_to_le32(TARGET_10_4_TX_DBG_LOG_SIZE);
 	config.num_wds_entries  = __cpu_to_le32(TARGET_10_4_NUM_WDS_ENTRIES);
 	config.dma_burst_size   = __cpu_to_le32(TARGET_10_4_DMA_BURST_SIZE);
+	if (ar->fwcfg.flags & ATH10K_FWCFG_DMA_BURST)
+		config.dma_burst_size = cpu_to_le32(ar->fwcfg.dma_burst);
 	config.mac_aggr_delim   = __cpu_to_le32(TARGET_10_4_MAC_AGGR_DELIM);
 
 	config.rx_skip_defrag_timeout_dup_detection_check =

@@ -1257,6 +1257,12 @@ start_again:
 				ar->fwcfg.flags |= ATH10K_FWCFG_FWVER;
 			}
 		}
+		else if (strcasecmp(filename, "dma_burst") == 0) {
+			if (kstrtol(val, 0, &t) == 0) {
+				ar->fwcfg.dma_burst = t;
+				ar->fwcfg.flags |= ATH10K_FWCFG_DMA_BURST;
+			}
+		}
 		else if (strcasecmp(filename, "vdevs") == 0) {
 			if (kstrtol(val, 0, &t) == 0) {
 				ar->fwcfg.vdevs = t;

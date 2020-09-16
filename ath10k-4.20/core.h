@@ -1237,6 +1237,7 @@ struct ath10k {
 #define ATH10K_FWCFG_NOBEAMFORM_SU  (1<<15)
 #define ATH10K_FWCFG_CT_STA         (1<<16)
 #define ATH10K_FWCFG_ALLOW_ALL_MCS  (1<<17)
+#define ATH10K_FWCFG_DMA_BURST      (1<<18)
 
 		u32 flags; /* let us know which fields have been set */
 		char calname[100];
@@ -1261,6 +1262,11 @@ struct ath10k {
 		u32 bmiss_vdevs; /* To disable, set to 0 */
 		u32 max_amsdus;
 		u32 allow_all_mcs;
+		u32 dma_burst; /* 0:  64b or maybe 128b or maybe 'raw'.  1:  256b.  I don't have
+				* enough docs to know exactly what this means.  See 76d164f582150fd0259ec0fcbc485470bcd8033e
+				* and the thing that reverts that.  This fwcfg option allows the user to over-ride this
+				* since it seems that 0 works best on some systems and 1 works best on others.
+				*/
 	} fwcfg;
 
 	struct {
