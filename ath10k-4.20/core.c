@@ -2401,6 +2401,47 @@ success:
 
 	return 0;
 }
+int ath10k_sum_sigs_2(int a, int b) {
+	int diff;
+
+	/* 0x80 means value-is-not-set */
+	if (b == 0x80)
+		return a;
+
+	if (a >= b) {
+		/* a is largest value, add to it. */
+		diff = a - b;
+		if (diff == 0)
+			return a + 3;
+		else if (diff == 1)
+			return a + 2;
+		else if (diff == 2)
+			return a + 1;
+		return a;
+	}
+	else {
+		/* b is largest value, add to it. */
+		diff = b - a;
+		if (diff == 0)
+			return b + 3;
+		else if (diff == 1)
+			return b + 2;
+		else if (diff == 2)
+			return b + 1;
+		return b;
+	}
+}
+
+int ath10k_sum_sigs(int p20, int e20, int e40, int e80) {
+	/* Hacky attempt at summing dbm without resorting to log(10) business */
+	/* 0x80 means value-is-not-set */
+	if (e40 != 0x80) {
+		return ath10k_sum_sigs_2(ath10k_sum_sigs_2(p20, e20), ath10k_sum_sigs_2(e40, e80));
+	}
+	else {
+		return ath10k_sum_sigs_2(p20, e20);
+	}
+}
 
 static int ath10k_core_pre_cal_download(struct ath10k *ar)
 {

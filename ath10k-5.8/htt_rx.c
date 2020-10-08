@@ -1174,6 +1174,13 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 	int i;
 
 	int nf = ATH10K_DEFAULT_NOISE_FLOOR;
+	/* wave-1 appears to put garbage in the secondary signal fields, even though the
+	 * descriptor definition makes it look like it should work.  Or possibly some firmware
+	 * bug in wave-1.  Either way, not worth bothering with right now, so just don't sum up the
+	 * secondaries.  This would tend to decrease reported RSSI a bit, but I think that
+	 * is not a big deal. --Ben
+	 */
+	bool sum_ext = !((ar->dev_id == QCA9887_1_0_DEVICE_ID) || (ar->dev_id == QCA988X_2_0_DEVICE_ID));
 
 #ifdef CONFIG_ATH10K_DEBUGFS
 	struct ath10k_pdev_ext_stats_ct *pes = &ar->debug.pdev_ext_stats;
@@ -1199,16 +1206,16 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 			sums[i] =
 #endif
 			status->chain_signal[i] = nf
-				+ ath10k_sum_sigs(rxd->ppdu_start.rssi_chains[i].pri20_mhz,
-						  rxd->ppdu_start.rssi_chains[i].ext20_mhz,
-						  rxd->ppdu_start.rssi_chains[i].ext40_mhz,
-						  rxd->ppdu_start.rssi_chains[i].ext80_mhz);
+				+ (sum_ext ? ath10k_sum_sigs(rxd->ppdu_start.rssi_chains[i].pri20_mhz,
+							     rxd->ppdu_start.rssi_chains[i].ext20_mhz,
+							     rxd->ppdu_start.rssi_chains[i].ext40_mhz,
+							     rxd->ppdu_start.rssi_chains[i].ext80_mhz) :
+				   rxd->ppdu_start.rssi_chains[i].pri20_mhz);
 			/* ath10k_warn(ar, "rx-h-sig, chain[%i] pri20: %d ext20: %d  ext40: %d  ext80: %d\n",
-			 *	    i, rxd->ppdu_start.rssi_chains[i].pri20_mhz,
-			 *          rxd->ppdu_start.rssi_chains[i].ext20_mhz,
-			 *	    rxd->ppdu_start.rssi_chains[i].ext40_mhz,
-			 *          rxd->ppdu_start.rssi_chains[i].ext80_mhz);
-			 */
+				    i, rxd->ppdu_start.rssi_chains[i].pri20_mhz,
+				    rxd->ppdu_start.rssi_chains[i].ext20_mhz,
+				    rxd->ppdu_start.rssi_chains[i].ext40_mhz,
+				    rxd->ppdu_start.rssi_chains[i].ext80_mhz); */
 
 			status->chains |= BIT(i);
 		}
@@ -1240,10 +1247,10 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 	}
 
 	/* ath10k_warn(ar, "rx-h-sig, signal: %d  chains: 0x%x  chain[0]: %d  chain[1]: %d  chain[2]: %d chain[3]: %d\n",
-	 *	    status->signal, status->chains, status->chain_signal[0],
-	 *	    status->chain_signal[1], status->chain_signal[2],
-	 *          status->chain_signal[3]);
-	 */
+		    status->signal, status->chains, status->chain_signal[0],
+		    status->chain_signal[1], status->chain_signal[2],
+		    status->chain_signal[3]); */
+
 	status->flag &= ~RX_FLAG_NO_SIGNAL_VAL;
 }
 

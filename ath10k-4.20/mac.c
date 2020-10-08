@@ -2530,6 +2530,7 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 	      (ar->dev_id == QCA988X_2_0_DEVICE_ID) ||
 	      (ar->dev_id == QCA9888_2_0_DEVICE_ID) || /* Wave-2 2x2 MU-MIMO NIC */
 	      (ar->dev_id == QCA99X0_2_0_DEVICE_ID) ||
+	      /* TODO-BEN:  Add IPQ4019, it should work. */
 	      (ar->dev_id == QCA9984_1_0_DEVICE_ID))) {
 #ifdef STANDALONE_CT
 		/* Assume OpenWRT/LEDE users don't need this anyway, so don't warn loudly. */

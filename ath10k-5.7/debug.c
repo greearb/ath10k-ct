@@ -537,6 +537,13 @@ void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 								      ar->debug.pdev_ext_stats.chan_nf_1,
 								      ar->debug.pdev_ext_stats.chan_nf_2,
 								      ar->debug.pdev_ext_stats.chan_nf_3);
+				/* ath10k_warn(ar, "nf-stats: %d %d %d %d   chan-nf: %d %d %d %d\n",
+					    ar->debug.nf_sum[0], ar->debug.nf_sum[1],
+					    ar->debug.nf_sum[2], ar->debug.nf_sum[3],
+					    ar->debug.pdev_ext_stats.chan_nf_0,
+					    ar->debug.pdev_ext_stats.chan_nf_1,
+					    ar->debug.pdev_ext_stats.chan_nf_2,
+					    ar->debug.pdev_ext_stats.chan_nf_3); */
 			}
 		}
 		ar->debug.fw_stats_done = true;

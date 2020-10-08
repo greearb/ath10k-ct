@@ -716,7 +716,7 @@ struct ath10k_debug {
 
 	struct ath10k_rx_reorder_stats rx_reorder_stats;
 	struct ath10k_pdev_ext_stats_ct pdev_ext_stats;
-	s32 nf_avg[4]; /* avg of all chains, reported by pdev_ext_stats */
+	s32 nf_sum[4]; /* sum of all chains, reported by pdev_ext_stats */
 	struct ath10k_fw_stats fw_stats;
 	struct completion fw_stats_complete;
 	bool fw_stats_done;
@@ -1577,5 +1577,8 @@ void ath10k_core_unregister(struct ath10k *ar);
 int ath10k_core_fetch_board_file(struct ath10k *ar, int bd_ie_type);
 void ath10k_core_free_board_files(struct ath10k *ar);
 void ath10k_core_free_limits(struct ath10k* ar);
+
+int ath10k_sum_sigs_2(int a, int b);
+int ath10k_sum_sigs(int p20, int e20, int e40, int e80);
 
 #endif /* _CORE_H_ */

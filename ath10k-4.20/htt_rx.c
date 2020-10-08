@@ -994,60 +994,27 @@ static bool ath10k_htt_rx_h_channel(struct ath10k *ar,
 	return true;
 }
 
-static int ath10k_sum_sigs_2(int a, int b) {
-	int diff;
-
-	/* 0x80 means value-is-not-set */
-	if (b == 0x80)
-		return a;
-
-	if (a >= b) {
-		/* a is largest value, add to it. */
-		diff = a - b;
-		if (diff == 0)
-			return a + 3;
-		else if (diff == 1)
-			return a + 2;
-		else if (diff == 2)
-			return a + 1;
-		return a;
-	}
-	else {
-		/* b is largest value, add to it. */
-		diff = b - a;
-		if (diff == 0)
-			return b + 3;
-		else if (diff == 1)
-			return b + 2;
-		else if (diff == 2)
-			return b + 1;
-		return b;
-	}
-}
-
-static int ath10k_sum_sigs(int p20, int e20, int e40, int e80) {
-	/* Hacky attempt at summing dbm without resorting to log(10) business */
-	/* 0x80 means value-is-not-set */
-	if (e40 != 0x80) {
-		return ath10k_sum_sigs_2(ath10k_sum_sigs_2(p20, e20), ath10k_sum_sigs_2(e40, e80));
-	}
-	else {
-		return ath10k_sum_sigs_2(p20, e20);
-	}
-}
-
 static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 				   struct ieee80211_rx_status *status,
 				   struct htt_rx_desc *rxd)
 {
 	int i;
-	int my_ch = 0;
 
 	int nf = ATH10K_DEFAULT_NOISE_FLOOR;
+	/* wave-1 appears to put garbage in the secondary signal fields, even though the
+	 * descriptor definition makes it look like it should work.  Or possibly some firmware
+	 * bug in wave-1.  Either way, not worth bothering with right now, so just don't sum up the
+	 * secondaries.  This would tend to decrease reported RSSI a bit, but I think that
+	 * is not a big deal. --Ben
+	 */
+	bool sum_ext = !((ar->dev_id == QCA9887_1_0_DEVICE_ID) || (ar->dev_id == QCA988X_2_0_DEVICE_ID));
 
 #ifdef CONFIG_ATH10K_DEBUGFS
 	struct ath10k_pdev_ext_stats_ct *pes = &ar->debug.pdev_ext_stats;
 	s32* nfa = &(pes->chan_nf_0);
+	s32 sums[IEEE80211_MAX_CHAINS];
+	bool has_nf = false;
+	sums[0] = sums[1] = sums[2] = sums[3] = 0x80;
 
 	/* FIXME:  Need to figure out how to take the secondary 80Mhz noise floor into
 	 * account too when using 160Mhz, but not worrying about that for now.
@@ -1059,48 +1026,58 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 
 		if (rxd->ppdu_start.rssi_chains[i].pri20_mhz != 0x80) {
 #ifdef CONFIG_ATH10K_DEBUGFS
-			if (nfa[i] && nfa[i] > -512)
+			if (nfa[i] != 0x80) {
 				nf = nfa[i];
+				has_nf = true;
+			}
+			sums[i] =
 #endif
 			status->chain_signal[i] = nf
-				+ ath10k_sum_sigs(rxd->ppdu_start.rssi_chains[i].pri20_mhz,
-						  rxd->ppdu_start.rssi_chains[i].ext20_mhz,
-						  rxd->ppdu_start.rssi_chains[i].ext40_mhz,
-						  rxd->ppdu_start.rssi_chains[i].ext80_mhz);
+				+ (sum_ext ? ath10k_sum_sigs(rxd->ppdu_start.rssi_chains[i].pri20_mhz,
+							     rxd->ppdu_start.rssi_chains[i].ext20_mhz,
+							     rxd->ppdu_start.rssi_chains[i].ext40_mhz,
+							     rxd->ppdu_start.rssi_chains[i].ext80_mhz) :
+				   rxd->ppdu_start.rssi_chains[i].pri20_mhz);
 			/* ath10k_warn(ar, "rx-h-sig, chain[%i] pri20: %d ext20: %d  ext40: %d  ext80: %d\n",
-			 *	    i, rxd->ppdu_start.rssi_chains[i].pri20_mhz,
-			 *          rxd->ppdu_start.rssi_chains[i].ext20_mhz,
-			 *	    rxd->ppdu_start.rssi_chains[i].ext40_mhz,
-			 *          rxd->ppdu_start.rssi_chains[i].ext80_mhz);
-			 */
+				    i, rxd->ppdu_start.rssi_chains[i].pri20_mhz,
+				    rxd->ppdu_start.rssi_chains[i].ext20_mhz,
+				    rxd->ppdu_start.rssi_chains[i].ext40_mhz,
+				    rxd->ppdu_start.rssi_chains[i].ext80_mhz); */
 
 			status->chains |= BIT(i);
-			my_ch++;
 		}
 	}
 
 	/* So, noise-floor is really per-chain, so I guess we average it here. */
+	/* This does not yield good results for 80Mhz, but does for 20Mhz.  I'm thinking
+	 * the rssi_comb is for just the first 20Mhz perhaps?  So, just add up the per-chain
+	 * values if we have a valid noise floor.
+	 */
 #ifdef CONFIG_ATH10K_DEBUGFS
 	nf = ATH10K_DEFAULT_NOISE_FLOOR;
-	if (my_ch && ar->debug.nf_avg)
-		nf = ar->debug.nf_avg[my_ch - 1];
-#endif
-
-	/* 0x80 means value-is-not-set on wave-2 firmware.
-	 * For wave-2 firmware, value is not defined and is set to zero. */
-	if (rxd->ppdu_start.rssi_comb_ht &&
-	    (rxd->ppdu_start.rssi_comb_ht != 0x80)) {
-		status->signal = nf + rxd->ppdu_start.rssi_comb_ht;
+	if (has_nf) {
+		status->signal = ath10k_sum_sigs(sums[0], sums[1], sums[2], sums[3]);
 	}
-	else {
-		status->signal = nf + rxd->ppdu_start.rssi_comb;
+	else
+#endif
+	{
+
+		/* 0x80 means value-is-not-set on wave-2 firmware.
+		 * For wave-2 firmware, value is not defined and is set to zero. */
+		if (rxd->ppdu_start.rssi_comb_ht &&
+		    (rxd->ppdu_start.rssi_comb_ht != 0x80)) {
+			status->signal = nf + rxd->ppdu_start.rssi_comb_ht;
+		}
+		else {
+			status->signal = nf + rxd->ppdu_start.rssi_comb;
+		}
 	}
 
 	/* ath10k_warn(ar, "rx-h-sig, signal: %d  chains: 0x%x  chain[0]: %d  chain[1]: %d  chain[2]: %d chain[3]: %d\n",
-	 *	    status->signal, status->chains, status->chain_signal[0],
-	 *	    status->chain_signal[1], status->chain_signal[2],
-	 *          status->chain_signal[3]);
-	 */
+		    status->signal, status->chains, status->chain_signal[0],
+		    status->chain_signal[1], status->chain_signal[2],
+		    status->chain_signal[3]); */
+
 	status->flag &= ~RX_FLAG_NO_SIGNAL_VAL;
 }
 

@@ -495,12 +495,62 @@ void ath10k_debug_fw_stats_process(struct ath10k *ar, struct sk_buff *skb)
 			my_len = min(my_len, stats_len);
 			my_stats = (u32*)(&(ar->debug.rx_reorder_stats));
 		}
+		else if (ev->num_pdev_stats == WMI_STAT_CUSTOM_PDEV_EXT_STATS) {
+			if (stats_len >= 10) {
+				struct ath10k_pdev_ext_stats_ct *pes = (void*)(data);
+				/* A bug in wave-1 (at least) FW caused us to get stats here when
+				 * we should not.  Fortunately, the bad stats are often shorter than 10
+				 * 32-bit values, so we ignore those.
+				 */
+				my_len = __le32_to_cpu(pes->count) + 2;
+				if (my_len == stats_len) { /* make sure it is self-consistent */
+					if (my_len > (sizeof(*pes) / 4)) {
+						my_len = sizeof(*pes) / 4;
+					}
+					my_len = min(my_len, stats_len);
+					my_stats = (u32*)(&(ar->debug.pdev_ext_stats));
+				}
+			}
+		}
 
 		/* If we know about the stats, handle it here. */
 		if (my_stats) {
 			int i;
 			for (i = 0; i<my_len; i++) {
 				my_stats[i] = __le32_to_cpu(data[i]);
+			}
+
+			/* Post-process some stats */
+			if (ev->num_pdev_stats == WMI_STAT_CUSTOM_PDEV_EXT_STATS) {
+				/* These are in 2s compliment form, convert:  f = (0 - ((f ^ 0x1ff) +1)) */
+#define COMP2(a) ar->debug.pdev_ext_stats.a = (0 - ((ar->debug.pdev_ext_stats.a ^ 0x1ff) + 1)); \
+				if (ar->debug.pdev_ext_stats.a == -512) { ar->debug.pdev_ext_stats.a = 0x80; }
+				COMP2(chan_nf_0);
+				COMP2(chan_nf_1);
+				COMP2(chan_nf_2);
+				COMP2(chan_nf_3);
+				COMP2(chan_nf_sec80_1);
+				COMP2(chan_nf_sec80_2);
+				COMP2(chan_nf_sec80_3);
+#undef COMP2
+				/* Calculate avg noise floor so we don't have to calculate it over and over in the rx path */
+				ar->debug.nf_sum[0] = ar->debug.pdev_ext_stats.chan_nf_0;
+				ar->debug.nf_sum[1] = ath10k_sum_sigs_2(ar->debug.pdev_ext_stats.chan_nf_0, ar->debug.pdev_ext_stats.chan_nf_1);
+				ar->debug.nf_sum[2] = ath10k_sum_sigs(ar->debug.pdev_ext_stats.chan_nf_0,
+								      ar->debug.pdev_ext_stats.chan_nf_1,
+								      ar->debug.pdev_ext_stats.chan_nf_2,
+								      0x80);
+				ar->debug.nf_sum[3] = ath10k_sum_sigs(ar->debug.pdev_ext_stats.chan_nf_0,
+								      ar->debug.pdev_ext_stats.chan_nf_1,
+								      ar->debug.pdev_ext_stats.chan_nf_2,
+								      ar->debug.pdev_ext_stats.chan_nf_3);
+				/* ath10k_warn(ar, "nf-stats: %d %d %d %d   chan-nf: %d %d %d %d\n",
+					    ar->debug.nf_sum[0], ar->debug.nf_sum[1],
+					    ar->debug.nf_sum[2], ar->debug.nf_sum[3],
+					    ar->debug.pdev_ext_stats.chan_nf_0,
+					    ar->debug.pdev_ext_stats.chan_nf_1,
+					    ar->debug.pdev_ext_stats.chan_nf_2,
+					    ar->debug.pdev_ext_stats.chan_nf_3); */
 			}
 		}
 		ar->debug.fw_stats_done = true;
@@ -833,6 +883,13 @@ int ath10k_refresh_target_rx_reorder_stats(struct ath10k *ar)
 	return 0; /* fail silently if firmware does not support this option. */
 }
 
+int ath10k_refresh_target_pdev_ext_ct_stats(struct ath10k *ar)
+{
+	if (test_bit(ATH10K_FW_FEATURE_CUST_STATS_CT,
+		     ar->running_fw->fw_file.fw_features))
+		return ath10k_refresh_peer_stats_t(ar, WMI_REQUEST_STAT_CUSTOM, WMI_STAT_CUSTOM_PDEV_EXT_STATS);
+	return 0; /* fail silently if firmware does not support this option. */
+}
 
 static ssize_t ath10k_read_rx_reorder_stats(struct file *file, char __user *user_buf,
 					    size_t count, loff_t *ppos)
@@ -933,6 +990,60 @@ exit:
 	kfree(buf);
 	return ret_cnt;
 }
+
+static ssize_t ath10k_read_pdev_ext_ct_stats(struct file *file, char __user *user_buf,
+					     size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	struct ath10k_pdev_ext_stats_ct *rrs;
+	char *buf = NULL;
+	unsigned int len = 0, buf_len = 8000;
+	ssize_t ret_cnt = 0;
+	int ret;
+
+	mutex_lock(&ar->conf_mutex);
+
+	rrs = &ar->debug.pdev_ext_stats;
+
+	if (ar->state != ATH10K_STATE_ON)
+		goto exit;
+
+	buf = kzalloc(buf_len, GFP_KERNEL);
+	if (!buf)
+		goto exit;
+
+	ret = ath10k_refresh_target_pdev_ext_ct_stats(ar);
+	if (ret)
+		goto exit;
+
+	len += scnprintf(buf + len, buf_len - len, "\n");
+	len += scnprintf(buf + len, buf_len - len, "%30s\n",
+			 "ath10k PDEV Extended Stats");
+	len += scnprintf(buf + len, buf_len - len, "%30s\n\n",
+				 "=================");
+
+#define PRINT_MY_STATS(a) len += scnprintf(buf + len, buf_len - len, "%30s %10d\n", #a, rrs->a)
+	PRINT_MY_STATS(flags);
+	PRINT_MY_STATS(num_chains);
+	PRINT_MY_STATS(chan_nf_0);
+	PRINT_MY_STATS(chan_nf_1);
+	PRINT_MY_STATS(chan_nf_2);
+	PRINT_MY_STATS(chan_nf_3);
+	PRINT_MY_STATS(chan_nf_sec80_1);
+	PRINT_MY_STATS(chan_nf_sec80_2);
+	PRINT_MY_STATS(chan_nf_sec80_3);
+
+	if (len > buf_len)
+		len = buf_len;
+
+	ret_cnt = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+
+exit:
+	mutex_unlock(&ar->conf_mutex);
+	kfree(buf);
+	return ret_cnt;
+}
+
 
 static ssize_t ath10k_read_fw_regs(struct file *file, char __user *user_buf,
 				   size_t count, loff_t *ppos)
@@ -1129,6 +1240,14 @@ static const struct file_operations fops_rx_reorder_stats = {
 	.owner = THIS_MODULE,
 	.llseek = default_llseek,
 };
+
+static const struct file_operations fops_pdev_ext_stats = {
+	.read = ath10k_read_pdev_ext_ct_stats,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
 
 static ssize_t ath10k_read_simulate_fw_crash(struct file *file,
 					     char __user *user_buf,
@@ -2015,6 +2134,11 @@ static void ath10k_debug_nop_dwork(struct work_struct *work)
 		if (ret) {
 			ath10k_warn(ar, "failed to send wmi nop: %d\n", ret);
 		}
+
+		/* big hack, grab noise-floor stats too so that we can use them to
+		 * report more accurate RSSI.
+		 */
+		ath10k_refresh_target_pdev_ext_ct_stats(ar);
 	}
 
 	/* Re-arm periodic work. */
@@ -4036,6 +4160,9 @@ int ath10k_debug_register(struct ath10k *ar)
 
 	debugfs_create_file("rx_reorder_stats", 0400, ar->debug.debugfs_phy, ar,
 			    &fops_rx_reorder_stats);
+
+	debugfs_create_file("pdev_ext_stats", 0400, ar->debug.debugfs_phy, ar,
+			    &fops_pdev_ext_stats);
 
 	debugfs_create_file("wmi_services", 0400, ar->debug.debugfs_phy, ar,
 			    &fops_wmi_services);
