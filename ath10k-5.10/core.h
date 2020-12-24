@@ -123,15 +123,21 @@ enum ath10k_skb_flags {
 	ATH10K_SKB_F_NOACK_TID = BIT(6),
 };
 
+/* This uses same mem structure as the struct ieee80211_tx_info.  First 12
+* bytes of that is the rate table.
+*/
 struct ath10k_skb_cb {
-	dma_addr_t paddr;
+	dma_addr_t paddr; /* 8, set late in tx path */
 	u8 flags;
 	u8 eid;
+	u8 ucast_cipher;
+	u8 pad; /* un-used space, use natural packing */
 	u16 msdu_id;
-	u16 airtime_est;
-	struct ieee80211_vif *vif;
-	struct ieee80211_txq *txq;
-	u32 ucast_cipher;
+	u16 airtime_est; /* = 16 bytes, set early */
+	struct ieee80211_vif *vif; /* = 24 bytes, set early */
+	struct ieee80211_txq *txq; /* = 32 bytes, set early */
+	u32 control_flags; /* = 36 bytes, placeholder for where control.flags sits */
+	/* room for 4 bytes, max total size == 40 */
 } __packed;
 
 struct ath10k_skb_rxcb {

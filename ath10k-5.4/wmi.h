@@ -3764,12 +3764,21 @@ enum ath10k_protmode {
 };
 
 enum wmi_rtscts_profile {
+	/* Neither of the rate-series should use RTS-CTS */
 	WMI_RTSCTS_FOR_NO_RATESERIES = 0,
+	/* Only the second rate-series will use RTS-CTS */
 	WMI_RTSCTS_FOR_SECOND_RATESERIES,
-	WMI_RTSCTS_ACROSS_SW_RETRIES
+	/* Only the second rate-series will use RTS-CTS, but if there's a
+	* sw retry, both the rate series will use RTS-CTS */
+	WMI_RTSCTS_ACROSS_SW_RETRIES,
+	/* Enable  RTS-CTS for all rate series */
+	WMI_RTSCTS_FOR_ALL_RATESERIES,
+	/*RTS/CTS used for ERP protection for every PPDU.*/
+	WMI_RTSCTS_ERP
 };
 
 #define WMI_RTSCTS_ENABLED		1
+#define WMI_CTSTOSELF_ENABLED		2
 #define WMI_RTSCTS_SET_MASK		0x0f
 #define WMI_RTSCTS_SET_LSB		0
 

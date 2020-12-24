@@ -2555,7 +2555,7 @@ wmi_process_mgmt_tx_comp(struct ath10k *ar, struct mgmt_tx_compl_params *param)
 		info->flags &= ~IEEE80211_TX_STAT_ACK;
 	} else {
 		info->flags |= IEEE80211_TX_STAT_ACK;
-		info->status.ack_signal = ATH10K_DEFAULT_NOISE_FLOOR +
+		info->status.ack_signal = ath10k_get_noisefloor(0, ar) +
 					  param->ack_rssi;
 		info->status.is_valid_ack_signal = true;
 	}
@@ -2696,7 +2696,7 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 	sband = &ar->mac.sbands[status->band];
 
 	status->freq = ieee80211_channel_to_frequency(channel, status->band);
-	status->signal = snr + ATH10K_DEFAULT_NOISE_FLOOR;
+	status->signal = snr + ath10k_get_noisefloor(0, ar);
 
 	BUILD_BUG_ON(ARRAY_SIZE(status->chain_signal) != ARRAY_SIZE(arg.rssi));
 
@@ -2706,7 +2706,7 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 		ath10k_dbg(ar, ATH10K_DBG_MGMT, "mgmt rssi[%d]:%d\n", i, arg.rssi[i]);
 
 		if (rssi != ATH10K_INVALID_RSSI && rssi != 0) {
-			status->chain_signal[i] = ATH10K_DEFAULT_NOISE_FLOOR + rssi;
+			status->chain_signal[i] = ath10k_get_noisefloor(i, ar) + rssi;
 			status->chains |= BIT(i);
 		}
 	}

@@ -1524,6 +1524,8 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 
 			sband = ar->hw->wiphy->bands[band];
 
+			/* Can use these info->control fields here because paddr is what writes over them,
+			 * and that has not been assigned yet. */
 			rix = info->control.rates[0].idx;
 			is_ht = info->control.rates[0].flags & IEEE80211_TX_RC_MCS;
 			is_vht = info->control.rates[0].flags & IEEE80211_TX_RC_VHT_MCS;

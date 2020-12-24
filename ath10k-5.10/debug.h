@@ -145,6 +145,8 @@ static inline int ath10k_debug_is_extd_tx_stats_enabled(struct ath10k *ar)
 	return ar->debug.enable_extd_tx_stats;
 }
 
+int ath10k_debug_fw_stats_request(struct ath10k *ar);
+
 void ath10k_dbg_save_fw_dbg_buffer(struct ath10k *ar, __le32 *buffer, int len);
 
 #else

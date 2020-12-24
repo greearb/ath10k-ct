@@ -3144,6 +3144,19 @@ static int ath10k_core_compat_services(struct ath10k *ar)
 	return 0;
 }
 
+/* Get noise floor of chain-1, ie for mgmt frames over wmi */
+int ath10k_get_noisefloor(int chain, struct ath10k *ar)
+{
+#ifdef CONFIG_ATH10K_DEBUGFS
+	struct ath10k_pdev_ext_stats_ct *pes = &ar->debug.pdev_ext_stats;
+	s32* nfa = &(pes->chan_nf_0);
+	if (nfa[chain] != 0x80) {
+		return nfa[chain];
+	}
+#endif
+	return ATH10K_DEFAULT_NOISE_FLOOR;
+}
+
 int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		      const struct ath10k_fw_components *fw)
 {

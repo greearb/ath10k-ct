@@ -3560,7 +3560,7 @@ int ath10k_core_start(struct ath10k *ar, enum ath10k_firmware_mode mode,
 		 */
 		ar->ct_all_pkts_htt = false;
 	}
-
+	
 	if (test_bit(ATH10K_FW_FEATURE_SET_SPECIAL_CT,
 		     ar->running_fw->fw_file.fw_features)) {
 		/* Apply user-supplied configuration changes. */
