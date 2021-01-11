@@ -1499,7 +1499,8 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 			    info->flags & IEEE80211_TX_CTL_TX_OFFCHAN, txmode);
 	}
 
-	/* ath10k_warn(ar, "info: %p  vif: %p arvif: %p txo-active: %d\n", info, vif, arvif, arvif && arvif->txo_active); */
+	/*ath10k_warn(ar, "info: %p  vif: %p arvif: %p txo-active: %d\n",
+		    info, vif, arvif, arvif && arvif->txo_active); */
 
 	if (unlikely(info->flags & IEEE80211_TX_CTL_TX_OFFCHAN))
 		freq = ar->scan.roc_freq;
@@ -1549,14 +1550,14 @@ static int ath10k_htt_tx_32(struct ath10k_htt *htt,
 				}
 
 				num_retries = info->control.rates[0].count;
-			} else if ((msdu->len >= 100) &&
-			    (ieee80211_is_data_qos(fc) || ieee80211_is_data(fc)) &&
-			    (!(ieee80211_is_qos_nullfunc(fc) || ieee80211_is_nullfunc(fc)))) {
+			} else if ((msdu->len >= 400) &&
+				   (ieee80211_is_data_qos(fc) || ieee80211_is_data(fc)) &&
+				   (!(ieee80211_is_qos_nullfunc(fc) || ieee80211_is_nullfunc(fc)))) {
 				/* Only do the overrides for data frames. */
-				/*ath10k_warn(ar, "qos-data: %d data: %d  qos-nullfunc: %d  nullfunc: %d\n",
-					    ieee80211_is_data_qos(fc), ieee80211_is_data(fc),
-					    ieee80211_is_qos_nullfunc(fc), ieee80211_is_nullfunc(fc));*/
-				/* In order to allow ARP to work, don't mess with frames < 100 bytes in length, assume
+				/* ath10k_warn(ar, "msdu->len: %d qos-data: %d data: %d  qos-nullfunc: %d  nullfunc: %d\n",
+					    msdu->len, ieee80211_is_data_qos(fc), ieee80211_is_data(fc),
+					    ieee80211_is_qos_nullfunc(fc), ieee80211_is_nullfunc(fc)); */
+				/* In order to allow ARP, DHCP, other such frames, don't mess with frames < 400 bytes in length, assume
 				 * test frames are larger.
 				 */
 
