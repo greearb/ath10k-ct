@@ -703,10 +703,16 @@ struct ath10k_vif {
 	 * 0xFF will mean value has not been set by user, and in that case,
 	 * we will auto-adjust the rates based on the legacy rate mask.
 	 **/
-	/* TODO-BEN:  This may conflict with upstream code? */
 	u8 mcast_rate[NUM_NL80211_BANDS];
 	u8 bcast_rate[NUM_NL80211_BANDS];
 	u8 mgt_rate[NUM_NL80211_BANDS];
+
+	/* Flag if these rates are set through debugfs, in that case, ignore
+	 * setting from farther up the stack.
+	 */
+	bool mcast_rate_set[NUM_NL80211_BANDS];
+	bool bcast_rate_set[NUM_NL80211_BANDS];
+	bool mgt_rate_set[NUM_NL80211_BANDS];
 
 	struct wmi_wmm_params_all_arg wmm_params;
 	struct work_struct ap_csa_work;

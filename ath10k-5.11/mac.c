@@ -6757,6 +6757,10 @@ static void ath10k_recalculate_mgmt_rate(struct ath10k *ar,
 
 	lockdep_assert_held(&ar->conf_mutex);
 
+	/* If user has over-ridden the mgt rate, don't muck with it here. */
+	if (arvif->mgt_rate_set[def->chan->band])
+		return;
+
 	sband = ar->hw->wiphy->bands[def->chan->band];
 	basic_rate_idx = ffs(vif->bss_conf.basic_rates) - 1;
 	bitrate = sband->bitrates[basic_rate_idx].bitrate;
@@ -6767,6 +6771,7 @@ static void ath10k_recalculate_mgmt_rate(struct ath10k *ar,
 		return;
 	}
 
+	arvif->mgt_rate[def->chan->band] = hw_rate_code;
 	vdev_param = ar->wmi.vdev_param->mgmt_rate;
 	ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id, vdev_param,
 					hw_rate_code);
@@ -6990,24 +6995,30 @@ static void ath10k_bss_info_changed(struct ieee80211_hw *hw,
 		rate = ATH10K_HW_RATECODE(hw_value, 0, preamble);
 
 		ath10k_dbg(ar, ATH10K_DBG_MAC,
-			   "mac vdev %d mcast_rate %x\n",
-			   arvif->vdev_id, rate);
+			   "mac vdev %d mcast_rate %x  override-set-mcast: %d  override-set-bcast: %d\n",
+			   arvif->vdev_id, rate, arvif->mcast_rate_set[band], arvif->bcast_rate_set[band]);
 
-		vdev_param = ar->wmi.vdev_param->mcast_data_rate;
-		ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
-						vdev_param, rate);
-		if (ret)
-			ath10k_warn(ar,
-				    "failed to set mcast rate on vdev %i: %d\n",
-				    arvif->vdev_id,  ret);
+		if (!arvif->mcast_rate_set[band]) {
+			arvif->mcast_rate[band] = rate;
+			vdev_param = ar->wmi.vdev_param->mcast_data_rate;
+			ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
+							vdev_param, rate);
+			if (ret)
+				ath10k_warn(ar,
+					    "failed to set mcast rate on vdev %i: %d\n",
+					    arvif->vdev_id,  ret);
+		}
 
-		vdev_param = ar->wmi.vdev_param->bcast_data_rate;
-		ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
-						vdev_param, rate);
-		if (ret)
-			ath10k_warn(ar,
-				    "failed to set bcast rate on vdev %i: %d\n",
-				    arvif->vdev_id,  ret);
+		if (!arvif->bcast_rate_set[band]) {
+			arvif->bcast_rate[band] = rate;
+			vdev_param = ar->wmi.vdev_param->bcast_data_rate;
+			ret = ath10k_wmi_vdev_set_param(ar, arvif->vdev_id,
+							vdev_param, rate);
+			if (ret)
+				ath10k_warn(ar,
+					    "failed to set bcast rate on vdev %i: %d\n",
+					    arvif->vdev_id,  ret);
+		}
 	}
 
 	if (changed & BSS_CHANGED_BASIC_RATES &&
