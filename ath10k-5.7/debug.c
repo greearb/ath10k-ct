@@ -1541,12 +1541,18 @@ static ssize_t ath10k_write_set_rates(struct file *file,
 	}
 
 	/* Store the value so we can re-apply it if firmware is restarted. */
-	if (set_rate_type == ar->wmi.vdev_param->mgmt_rate)
+	if (set_rate_type == ar->wmi.vdev_param->mgmt_rate) {
 		arvif->mgt_rate[cfg_band] = rc;
-	else if (set_rate_type == ar->wmi.vdev_param->bcast_data_rate)
+		arvif->mgt_rate_set[cfg_band] = true;
+	}
+	else if (set_rate_type == ar->wmi.vdev_param->bcast_data_rate) {
 		arvif->bcast_rate[cfg_band] = rc;
-	else if (set_rate_type == ar->wmi.vdev_param->mcast_data_rate)
+		arvif->bcast_rate_set[cfg_band] = true;
+	}
+	else if (set_rate_type == ar->wmi.vdev_param->mcast_data_rate) {
 		arvif->mcast_rate[cfg_band] = rc;
+		arvif->mcast_rate_set[cfg_band] = true;
+	}
 
 	if (ar->state != ATH10K_STATE_ON &&
 	    ar->state != ATH10K_STATE_RESTARTED) {
