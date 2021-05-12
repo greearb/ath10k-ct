@@ -835,6 +835,7 @@ void ath10k_dbg_dma_map(struct ath10k* ar, unsigned long long addr, unsigned lon
 struct ath10k {
 	struct ath_common ath_common;
 	struct ieee80211_hw *hw;
+	struct ieee80211_ops *ops;
 	struct device *dev;
 	u8 mac_addr[ETH_ALEN];
 
@@ -925,6 +926,8 @@ struct ath10k {
 			size_t board_size;
 			size_t board_ext_size;
 		} fw;
+
+		const struct ath10k_hw_ops *hw_ops;
 	} hw_params;
 
 	/* contains the firmware images used with ATH10K_FIRMWARE_MODE_NORMAL */
@@ -1177,6 +1180,19 @@ struct ath10k {
 		u32 ct_pshack;
 		u32 ct_csi;
 	} eeprom_overrides;
+
+	struct work_struct set_coverage_class_work;
+	/* protected by conf_mutex */
+	struct {
+		/* writing also protected by data_lock */
+		s16 coverage_class;
+
+		u32 reg_phyclk;
+		u32 reg_slottime_conf;
+		u32 reg_slottime_orig;
+		u32 reg_ack_cts_timeout_conf;
+		u32 reg_ack_cts_timeout_orig;
+	} fw_coverage;
 
 	/* must be last */
 	u8 drv_priv[0] __aligned(sizeof(void *));

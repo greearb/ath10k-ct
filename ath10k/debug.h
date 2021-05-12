@@ -103,6 +103,15 @@ int ath10k_debug_get_et_sset_count(struct ieee80211_hw *hw,
 void ath10k_debug_get_et_stats(struct ieee80211_hw *hw,
 			       struct ieee80211_vif *vif,
 			       struct ethtool_stats *stats, u64 *data);
+static inline u64 ath10k_debug_get_fw_dbglog_mask(struct ath10k *ar)
+{
+	return ar->debug.fw_dbglog_mask;
+}
+
+static inline u32 ath10k_debug_get_fw_dbglog_level(struct ath10k *ar)
+{
+	return ar->debug.fw_dbglog_level;
+}
 
 void ath10k_dbg_save_fw_dbg_buffer(struct ath10k *ar, __le32 *buffer, int len);
 #else
@@ -157,6 +166,16 @@ static inline struct ath10k_fw_crash_data *
 ath10k_debug_get_new_fw_crash_data(struct ath10k *ar)
 {
 	return NULL;
+}
+
+static inline u64 ath10k_debug_get_fw_dbglog_mask(struct ath10k *ar)
+{
+	return 0;
+}
+
+static inline u32 ath10k_debug_get_fw_dbglog_level(struct ath10k *ar)
+{
+	return 0;
 }
 
 #define ATH10K_DFS_STAT_INC(ar, c) do { } while (0)
