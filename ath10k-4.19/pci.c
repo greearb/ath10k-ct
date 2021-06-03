@@ -1073,10 +1073,9 @@ int ath10k_pci_diag_write_mem(struct ath10k *ar, u32 address,
 	struct ath10k_ce *ce = ath10k_ce_priv(ar);
 	int ret = 0;
 	u32 *buf;
-	unsigned int completed_nbytes, orig_nbytes, remaining_bytes;
+	unsigned int completed_nbytes, alloc_nbytes, remaining_bytes;
 	struct ath10k_ce_pipe *ce_diag;
 	void *data_buf = NULL;
-	u32 ce_data;	/* Host buffer address in CE space */
 	dma_addr_t ce_data_base = 0;
 	int i;
 
@@ -1090,18 +1089,16 @@ int ath10k_pci_diag_write_mem(struct ath10k *ar, u32 address,
 	 *   1) 4-byte alignment
 	 *   2) Buffer in DMA-able space
 	 */
-	orig_nbytes = nbytes;
+	alloc_nbytes = min_t(unsigned int, nbytes, DIAG_TRANSFER_LIMIT);
+
 	data_buf = (unsigned char *)dma_alloc_coherent(ar->dev,
-						       orig_nbytes,
+						       alloc_nbytes,
 						       &ce_data_base,
 						       GFP_ATOMIC);
 	if (!data_buf) {
 		ret = -ENOMEM;
 		goto done;
 	}
-
-	/* Copy caller's data to allocated DMA buf */
-	memcpy(data_buf, data, orig_nbytes);
 
 	/*
 	 * The address supplied by the caller is in the
@@ -1115,11 +1112,13 @@ int ath10k_pci_diag_write_mem(struct ath10k *ar, u32 address,
 	 */
 	address = ath10k_pci_targ_cpu_to_ce_addr(ar, address);
 
-	remaining_bytes = orig_nbytes;
-	ce_data = ce_data_base;
+	remaining_bytes = nbytes;
 	while (remaining_bytes) {
 		/* FIXME: check cast */
 		nbytes = min_t(int, remaining_bytes, DIAG_TRANSFER_LIMIT);
+
+		/* Copy caller's data to allocated DMA buf */
+		memcpy(data_buf, data, nbytes);
 
 		/* Set up to receive directly into Target(!) address */
 		ret = ce_diag->ops->ce_rx_post_buf(ce_diag, &address, address);
@@ -1130,7 +1129,7 @@ int ath10k_pci_diag_write_mem(struct ath10k *ar, u32 address,
 		 * Request CE to send caller-supplied data that
 		 * was copied to bounce buffer to Target(!) address.
 		 */
-		ret = ath10k_ce_send_nolock(ce_diag, NULL, (u32)ce_data,
+		ret = ath10k_ce_send_nolock(ce_diag, NULL, ce_data_base,
 					    nbytes, 0, 0);
 		if (ret != 0)
 			goto done;
@@ -1171,12 +1170,12 @@ int ath10k_pci_diag_write_mem(struct ath10k *ar, u32 address,
 
 		remaining_bytes -= nbytes;
 		address += nbytes;
-		ce_data += nbytes;
+		data += nbytes;
 	}
 
 done:
 	if (data_buf) {
-		dma_free_coherent(ar->dev, orig_nbytes, data_buf,
+		dma_free_coherent(ar->dev, alloc_nbytes, data_buf,
 				  ce_data_base);
 	}
 
@@ -1816,11 +1815,22 @@ static int ath10k_pci_dump_memory_reg(struct ath10k *ar,
 {
 	struct ath10k_pci *ar_pci = ath10k_pci_priv(ar);
 	u32 i;
+	int ret;
+
+	mutex_lock(&ar->conf_mutex);
+	if (ar->state != ATH10K_STATE_ON) {
+		ath10k_warn(ar, "Skipping pci_dump_memory_reg invalid state\n");
+		ret = -EIO;
+		goto done;
+	}
 
 	for (i = 0; i < region->len; i += 4)
 		*(u32 *)(buf + i) = ioread32(ar_pci->mem + region->start + i);
 
-	return region->len;
+	ret = region->len;
+done:
+	mutex_unlock(&ar->conf_mutex);
+	return ret;
 }
 
 /* if an error happened returns < 0, otherwise the length */
@@ -1916,7 +1926,11 @@ static void ath10k_pci_dump_memory(struct ath10k *ar,
 			count = ath10k_pci_dump_memory_sram(ar, current_region, buf);
 			break;
 		case ATH10K_MEM_REGION_TYPE_IOREG:
-			count = ath10k_pci_dump_memory_reg(ar, current_region, buf);
+			ret = ath10k_pci_dump_memory_reg(ar, current_region, buf);
+			if (ret < 0)
+				break;
+
+			count = ret;
 			break;
 		default:
 			ret = ath10k_pci_dump_memory_generic(ar, current_region, buf);
@@ -2358,19 +2372,6 @@ static void ath10k_pci_hif_stop(struct ath10k *ar)
 
 	ath10k_dbg(ar, ATH10K_DBG_BOOT, "boot hif stop\n");
 
-	/* Most likely the device has HTT Rx ring configured. The only way to
-	 * prevent the device from accessing (and possible corrupting) host
-	 * memory is to reset the chip now.
-	 *
-	 * There's also no known way of masking MSI interrupts on the device.
-	 * For ranged MSI the CE-related interrupts can be masked. However
-	 * regardless how many MSI interrupts are assigned the first one
-	 * is always used for firmware indications (crashes) and cannot be
-	 * masked. To prevent the device from asserting the interrupt reset it
-	 * before proceeding with cleanup.
-	 */
-	ath10k_pci_safe_chip_reset(ar);
-
 	ath10k_pci_irq_disable(ar);
 	ath10k_pci_irq_sync(ar);
 
@@ -2395,6 +2396,19 @@ static void ath10k_pci_hif_stop(struct ath10k *ar)
 		napi_disable(&ar->napi);
 		ar->napi_enabled = false;
 	}
+
+	/* Most likely the device has HTT Rx ring configured. The only way to
+	 * prevent the device from accessing (and possible corrupting) host
+	 * memory is to reset the chip now.
+	 *
+	 * There's also no known way of masking MSI interrupts on the device.
+	 * For ranged MSI the CE-related interrupts can be masked. However
+	 * regardless how many MSI interrupts are assigned the first one
+	 * is always used for firmware indications (crashes) and cannot be
+	 * masked. To prevent the device from asserting the interrupt reset it
+	 * before proceeding with cleanup.
+	 */
+	ath10k_pci_safe_chip_reset(ar);
 
 	ath10k_pci_flush(ar);
 

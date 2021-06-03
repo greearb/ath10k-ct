@@ -802,7 +802,7 @@ static inline void wmi_10_4_svc_map(const __le32 *in, unsigned long *out,
 	//SVCMAP(WMI_10_4_SERVICE_TX_DATA_ACK_RSSI,
 	//       WMI_SERVICE_TX_DATA_ACK_RSSI, len);
 	//SVCMAP(WMI_10_4_SERVICE_VDEV_DIFFERENT_BEACON_INTERVAL_SUPPORT,
-	//       WMI_SERVICE_VDEV_DIFFERENT_BEACON_INTERVAL_SUPPORT, len);	
+	//       WMI_SERVICE_VDEV_DIFFERENT_BEACON_INTERVAL_SUPPORT, len);
 	//SVCMAP(WMI_10_4_SERVICE_VDEV_DISABLE_4_ADDR_SRC_LRN_SUPPORT,
 	//       WMI_SERVICE_VDEV_DISABLE_4_ADDR_SRC_LRN_SUPPORT, len);
 	//SVCMAP(WMI_10_4_SERVICE_RTT_RESPONDER_ROLE,
@@ -7112,8 +7112,8 @@ struct wmi_ch_info_ev_arg {
 
 /* From 10.4 firmware, not sure all have the same values. */
 enum wmi_vdev_start_status {
-        WMI_VDEV_START_OK = 0,
-        WMI_VDEV_START_CHAN_INVALID,
+	WMI_VDEV_START_OK = 0,
+	WMI_VDEV_START_CHAN_INVALID,
 };
 
 struct wmi_vdev_start_ev_arg {
@@ -7179,6 +7179,7 @@ struct wmi_svc_rdy_ev_arg {
 };
 
 struct wmi_svc_avail_ev_arg {
+	bool service_map_ext_valid;
 	__le32 service_map_ext_len;
 	const __le32 *service_map_ext;
 };
