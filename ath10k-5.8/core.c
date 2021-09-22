@@ -8,7 +8,6 @@
 #include <linux/module.h>
 #include <linux/firmware.h>
 #include <linux/of.h>
-#include <linux/of_net.h>
 #include <linux/property.h>
 #include <linux/dmi.h>
 #include <linux/ctype.h>
@@ -3754,7 +3753,6 @@ EXPORT_SYMBOL(ath10k_core_stop);
 static int ath10k_core_probe_fw(struct ath10k *ar)
 {
 	struct bmi_target_info target_info;
-	const char *mac;
 	int ret = 0;
 
 	ret = ath10k_hif_power_up(ar, ATH10K_FIRMWARE_MODE_NORMAL);
@@ -3854,9 +3852,7 @@ static int ath10k_core_probe_fw(struct ath10k *ar)
 		ath10k_debug_print_board_info(ar);
 	}
 
-	mac = of_get_mac_address(ar->dev->of_node);
-	if (!IS_ERR(mac))
-		ether_addr_copy(ar->mac_addr, mac);
+	device_get_mac_address(ar->dev, ar->mac_addr, sizeof(ar->mac_addr));
 
 	ret = ath10k_core_init_firmware_features(ar);
 	if (ret) {
