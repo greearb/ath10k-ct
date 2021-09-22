@@ -3615,7 +3615,7 @@ static ssize_t ath10k_write_ct_special(struct file *file,
 	}
 	else if (id == SET_SPECIAL_ID_PEER_CT_ANTMASK) {
 		/* Not stored in driver, will not be restored upon FW crash/restart */
-		ath10k_warn(ar, "Setting ct-andmask for peer: %d to 0x%x.\n", val >> 16, val & 0x16);
+		ath10k_warn(ar, "Setting ct-antmask for peer: %d to 0x%x.\n", val >> 16, val & 0xf);
 	}
 	else if (id == SET_SPECIAL_ID_EEPROM_CFG_ADDR_A) {
 		/* Not stored in driver, will not be restored upon FW crash/restart */
