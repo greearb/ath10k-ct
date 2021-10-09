@@ -1485,6 +1485,7 @@ done:
 static int ath10k_core_fetch_board_data_api_1(struct ath10k *ar, int bd_ie_type)
 {
 	const struct firmware *fw;
+	char device_boardname[100], boardname[100];
 
 	if (bd_ie_type == ATH10K_BD_IE_BOARD) {
 		if (!ar->hw_params.fw.board) {
@@ -1492,14 +1493,27 @@ static int ath10k_core_fetch_board_data_api_1(struct ath10k *ar, int bd_ie_type)
 			return -EINVAL;
 		}
 
-		if (ar->fwcfg.bname[0])
+		scnprintf(device_boardname, sizeof(device_boardname), "board-%s-%s.bin",
+			  ath10k_bus_str(ar->hif.bus), dev_name(ar->dev));
+
+		if (ar->fwcfg.bname[0]) {
 			ar->normal_mode_fw.board = ath10k_fetch_fw_file(ar,
 									ar->hw_params.fw.dir,
 									ar->fwcfg.bname);
-		else
+			strlcpy(boardname, ar->fwcfg.bname, sizeof(boardname));
+		}
+		else {
 			ar->normal_mode_fw.board = ath10k_fetch_fw_file(ar,
 									ar->hw_params.fw.dir,
-									ar->hw_params.fw.board);
+									device_boardname);
+			if (IS_ERR(ar->normal_mode_fw.board)) {
+				ar->normal_mode_fw.board = ath10k_fetch_fw_file(ar,
+										ar->hw_params.fw.dir,
+										ar->hw_params.fw.board);
+				strlcpy(boardname, ar->hw_params.fw.board, sizeof(boardname));
+			} else
+				strlcpy(boardname, device_boardname, sizeof(boardname));
+		}
 		if (IS_ERR(ar->normal_mode_fw.board))
 			return PTR_ERR(ar->normal_mode_fw.board);
 
@@ -1526,12 +1540,7 @@ static int ath10k_core_fetch_board_data_api_1(struct ath10k *ar, int bd_ie_type)
 	}
 
 	/* Save firmware board name so we can display it later. */
-	if (ar->fwcfg.bname[0])
-		strlcpy(ar->normal_mode_fw.fw_file.fw_board_name, ar->fwcfg.bname,
-			sizeof(ar->normal_mode_fw.fw_file.fw_board_name));
-	else
-		strlcpy(ar->normal_mode_fw.fw_file.fw_board_name, ar->hw_params.fw.board,
-			sizeof(ar->normal_mode_fw.fw_file.fw_board_name));
+	strlcpy(ar->normal_mode_fw.fw_file.fw_board_name, boardname, sizeof(boardname));
 
 	return 0;
 }
@@ -1825,6 +1834,8 @@ int ath10k_core_fetch_board_file(struct ath10k *ar, int bd_ie_type)
 {
 	char boardname[100], fallback_boardname[100];
 	int ret;
+
+	ath10k_info(ar, "Loading BDF type %d", bd_ie_type);
 
 	if (bd_ie_type == ATH10K_BD_IE_BOARD) {
 		ret = ath10k_core_create_board_name(ar, boardname,
