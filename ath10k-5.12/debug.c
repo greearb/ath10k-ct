@@ -1787,6 +1787,25 @@ static const struct file_operations fops_chip_id = {
 	.llseek = default_llseek,
 };
 
+static ssize_t ath10k_read_restart_failed(struct file *file, char __user *user_buf,
+					  size_t count, loff_t *ppos)
+{
+	struct ath10k *ar = file->private_data;
+	size_t len;
+	char buf[50];
+
+	len = scnprintf(buf, sizeof(buf), "%d\n", ar->restart_failed);
+
+	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+}
+
+static const struct file_operations fops_restart_failed = {
+	.read = ath10k_read_restart_failed,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
 static int ath10k_fw_crash_dump_open(struct inode *inode, struct file *file)
 {
 	struct ath10k *ar = inode->i_private;
@@ -4482,6 +4501,9 @@ int ath10k_debug_register(struct ath10k *ar)
 
 	debugfs_create_file("chip_id", 0400, ar->debug.debugfs_phy, ar,
 			    &fops_chip_id);
+
+	debugfs_create_file("restart_failed", 0400, ar->debug.debugfs_phy, ar,
+			    &fops_restart_failed);
 
 	debugfs_create_file("htt_stats_mask", 0600, ar->debug.debugfs_phy, ar,
 			    &fops_htt_stats_mask);

@@ -2877,6 +2877,8 @@ static void ath10k_core_restart(struct work_struct *work)
 
 	mutex_lock(&ar->conf_mutex);
 
+	ar->restart_failed = 0; /* assume good things */
+
 	switch (ar->state) {
 	case ATH10K_STATE_ON:
 		ar->state = ATH10K_STATE_RESTARTING;
@@ -2889,6 +2891,7 @@ static void ath10k_core_restart(struct work_struct *work)
 		 * or if the crash happens during FW probing
 		 */
 		ath10k_warn(ar, "cannot restart a device that hasn't been started\n");
+		ar->restart_failed = 1;
 		break;
 	case ATH10K_STATE_RESTARTING:
 		/* hw restart might be requested from multiple places */
@@ -2898,9 +2901,11 @@ static void ath10k_core_restart(struct work_struct *work)
 		fallthrough;
 	case ATH10K_STATE_WEDGED:
 		ath10k_warn(ar, "device is wedged, will not restart\n");
+		ar->restart_failed = 2;
 		break;
 	case ATH10K_STATE_UTF:
 		ath10k_warn(ar, "firmware restart in UTF mode not supported\n");
+		ar->restart_failed = 3;
 		break;
 	}
 

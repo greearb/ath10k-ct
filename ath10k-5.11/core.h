@@ -1508,6 +1508,7 @@ struct ath10k {
 	struct sk_buff_head wmi_mgmt_tx_queue;
 
 	enum ath10k_state state;
+	int restart_failed; /* 0: ok, 1: state-off  2: wedged */
 
 	struct work_struct register_work;
 	struct work_struct restart_work;
