@@ -260,7 +260,7 @@ int ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 			nf = ar->debug.nf_sum[0];
 #endif
 		info->status.ack_signal = nf + tx_done->ack_rssi;
-		info->status.is_valid_ack_signal = true;
+		info->status.flags |= IEEE80211_TX_STATUS_ACK_SIGNAL_VALID;
 	}
 
 	if (tx_done->tx_rate_code || tx_done->tx_rate_flags || ar->ok_tx_rate_status) {
