@@ -1344,47 +1344,58 @@ static const struct file_operations fops_simulate_fw_crash = {
 	.llseek = default_llseek,
 };
 
+static const char debug_level_buf[] =
+	"To change debug level, set value adding up desired flags:\n"
+	"PCI:                0x1\n"
+	"WMI:                0x2\n"
+	"HTC:                0x4\n"
+	"HTT:                0x8\n"
+	"MAC:               0x10\n"
+	"BOOT:              0x20\n"
+	"PCI-DUMP:          0x40\n"
+	"HTT-DUMP:          0x80\n"
+	"MGMT:             0x100\n"
+	"DATA:             0x200\n"
+	"BMI:              0x400\n"
+	"REGULATORY:       0x800\n"
+	"TESTMODE:        0x1000\n"
+	"WMI-PRINT:       0x2000\n"
+	"PCI-PS:          0x4000\n"
+	"AHB:             0x8000\n"
+	"SDIO:		 0x10000\n"
+	"SDIO_DUMP:	 0x20000\n"
+	"USB:		 0x40000\n"
+	"USB_BULK:	 0x80000\n"
+	"SNOC:		0x100000\n"
+	"QMI:		0x200000\n"
+	"BEACONS:      0x8000000\n"
+	"NO-FW-DBGLOG:0x10000000\n"
+	"MAC2:        0x20000000\n"
+	"INFO-AS-DBG: 0x40000000\n"
+	"FW:          0x80000000\n"
+	"ALL:         0xEFFFFFFF\n";
+
+#define READ_DEBUG_LEVEL_SIZE sizeof(debug_level_buf) + 60
+
 static ssize_t ath10k_read_debug_level(struct file *file,
 				       char __user *user_buf,
 				       size_t count, loff_t *ppos)
 {
-	int sz;
-	const char buf[] =
-		"To change debug level, set value adding up desired flags:\n"
-		"PCI:                0x1\n"
-		"WMI:                0x2\n"
-		"HTC:                0x4\n"
-		"HTT:                0x8\n"
-		"MAC:               0x10\n"
-		"BOOT:              0x20\n"
-		"PCI-DUMP:          0x40\n"
-		"HTT-DUMP:          0x80\n"
-		"MGMT:             0x100\n"
-		"DATA:             0x200\n"
-		"BMI:              0x400\n"
-		"REGULATORY:       0x800\n"
-		"TESTMODE:        0x1000\n"
-		"WMI-PRINT:       0x2000\n"
-		"PCI-PS:          0x4000\n"
-		"AHB:             0x8000\n"
-		"SDIO:		 0x10000\n"
-		"SDIO_DUMP:	 0x20000\n"
-		"USB:		 0x40000\n"
-		"USB_BULK:	 0x80000\n"
-		"SNOC:		0x100000\n"
-		"QMI:		0x200000\n"
-		"BEACONS:      0x8000000\n"
-		"NO-FW-DBGLOG:0x10000000\n"
-		"MAC2:        0x20000000\n"
-		"INFO-AS-DBG: 0x40000000\n"
-		"FW:          0x80000000\n"
-		"ALL:         0xEFFFFFFF\n";
-	char wbuf[sizeof(buf) + 60];
-	sz = snprintf(wbuf, sizeof(wbuf), "Current debug level: 0x%x\n\n%s",
-		      ath10k_debug_mask, buf);
-	wbuf[sizeof(wbuf) - 1] = 0;
+	int sz, ret;
+	char *wbuf;
 
-	return simple_read_from_buffer(user_buf, count, ppos, wbuf, sz);
+	wbuf = kcalloc(READ_DEBUG_LEVEL_SIZE, sizeof(char), GFP_KERNEL);
+	if (!wbuf)
+		return -ENOMEM;
+
+	sz = snprintf(wbuf, READ_DEBUG_LEVEL_SIZE,
+		      "Current debug level: 0x%x\n\n%s",
+		      ath10k_debug_mask, debug_level_buf);
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, wbuf, sz);
+	kfree(wbuf);
+
+	return ret;
 }
 
 /* Set logging level.
