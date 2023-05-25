@@ -84,4 +84,19 @@ KVER=5.17
 mkdir -p ./ath10k-$KVER
 cp -ar ~/git/linux-$KVER.dev.y/drivers/net/wireless/ath/ath10k/* ./ath10k-$KVER
 
+# And for 5.19 kernel
+KVER=5.19
+mkdir -p ./ath10k-$KVER
+cp -ar ~/git/linux-$KVER.dev.y/drivers/net/wireless/ath/ath10k/* ./ath10k-$KVER
+
+# And for 6.2 kernel
+KVER=6.2
+mkdir -p ./ath10k-$KVER
+cp -ar ~/git/linux-$KVER.dev.y/drivers/net/wireless/ath/ath10k/* ./ath10k-$KVER
+
+# And for 6.4 kernel
+KVER=6.4
+mkdir -p ./ath10k-$KVER
+cp -ar ~/git/linux-$KVER.dev.y/drivers/net/wireless/ath/ath10k/* ./ath10k-$KVER
+
 

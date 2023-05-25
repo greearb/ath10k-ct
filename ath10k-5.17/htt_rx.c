@@ -953,7 +953,8 @@ static void ath10k_htt_rx_h_rates(struct ath10k *ar,
 				  struct htt_rx_desc *rxd)
 {
 	struct ieee80211_supported_band *sband;
-	u8 cck, rate, bw, sgi, mcs, nss;
+	u8 cck, rate, bw, sgi, mcs;
+	u8 nss = 0;
 	u8 preamble = 0;
 	u8 group_id;
 	u32 info1, info2, info3;
@@ -971,7 +972,7 @@ static void ath10k_htt_rx_h_rates(struct ath10k *ar,
 		 * be undefined check if freq is non-zero.
 		 */
 		if (!status->freq)
-			return;
+			break;
 
 		cck = info1 & RX_PPDU_START_INFO1_L_SIG_RATE_SELECT;
 		rate = MS(info1, RX_PPDU_START_INFO1_L_SIG_RATE);
@@ -1051,7 +1052,6 @@ static void ath10k_htt_rx_h_rates(struct ath10k *ar,
 		}
 
 		status->rate_idx = mcs;
-		status->nss = nss;
 
 		if (sgi)
 			status->enc_flags |= RX_ENC_FLAG_SHORT_GI;
@@ -1062,6 +1062,8 @@ static void ath10k_htt_rx_h_rates(struct ath10k *ar,
 	default:
 		break;
 	}
+
+	status->nss = nss;
 }
 
 static struct ieee80211_channel *
@@ -1186,7 +1188,7 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 				   struct htt_rx_desc *rxd)
 {
 	int i;
-
+	const int* adjust = adjust_zero;
 	int nf = ATH10K_DEFAULT_NOISE_FLOOR;
 	/* wave-1 appears to put garbage in the secondary signal fields, even though the
 	 * descriptor definition makes it look like it should work.  Or possibly some firmware
@@ -1201,6 +1203,14 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 	s32* nfa = &(pes->chan_nf_0);
 	s32 sums[IEEE80211_MAX_CHAINS];
 	bool has_nf = false;
+
+	if (ar->debug.use_ofdm_peak_power) {
+		if (status->band == NL80211_BAND_5GHZ)
+			adjust = adjust_5;
+		else
+			adjust = adjust_24;
+	}
+
 	sums[0] = sums[1] = sums[2] = sums[3] = 0x80;
 
 	/* FIXME:  Need to figure out how to take the secondary 80Mhz noise floor into
@@ -1219,7 +1229,7 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 			}
 			sums[i] =
 #endif
-			status->chain_signal[i] = nf
+			status->chain_signal[i] = nf + adjust[status->nss]
 				+ (sum_ext ? ath10k_sum_sigs(rxd->ppdu_start.rssi_chains[i].pri20_mhz,
 							     rxd->ppdu_start.rssi_chains[i].ext20_mhz,
 							     rxd->ppdu_start.rssi_chains[i].ext40_mhz,
@@ -1253,17 +1263,17 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 		 * For wave-2 firmware, value is not defined and is set to zero. */
 		if (rxd->ppdu_start.rssi_comb_ht &&
 		    (rxd->ppdu_start.rssi_comb_ht != 0x80)) {
-			status->signal = nf + rxd->ppdu_start.rssi_comb_ht;
+			status->signal = nf + rxd->ppdu_start.rssi_comb_ht + adjust[status->nss];
 		}
 		else {
-			status->signal = nf + rxd->ppdu_start.rssi_comb;
+			status->signal = nf + rxd->ppdu_start.rssi_comb + adjust[status->nss];
 		}
 	}
 
-	/* ath10k_warn(ar, "rx-h-sig, signal: %d  chains: 0x%x  chain[0]: %d  chain[1]: %d  chain[2]: %d chain[3]: %d has_nf: %d\n",
+	/* ath10k_warn(ar, "rx-h-sig, signal: %d  chains: 0x%x  chain[0]: %d  chain[1]: %d  chain[2]: %d chain[3]: %d has_nf: %d adjust: %d\n",
 		    status->signal, status->chains, status->chain_signal[0],
 		    status->chain_signal[1], status->chain_signal[2],
-		    status->chain_signal[3], has_nf); */
+		    status->chain_signal[3], has_nf, adjust[status->nss]); */
 
 	status->flag &= ~RX_FLAG_NO_SIGNAL_VAL;
 }
@@ -1320,9 +1330,9 @@ static void ath10k_htt_rx_h_ppdu(struct ath10k *ar,
 		status->flag |= RX_FLAG_AMPDU_DETAILS | RX_FLAG_AMPDU_LAST_KNOWN;
 		status->ampdu_reference = ar->ampdu_reference;
 
-		ath10k_htt_rx_h_signal(ar, status, rxd);
 		ath10k_htt_rx_h_channel(ar, status, rxd, vdev_id);
 		ath10k_htt_rx_h_rates(ar, status, rxd);
+		ath10k_htt_rx_h_signal(ar, status, rxd);
 	}
 
 	if (is_last_ppdu) {

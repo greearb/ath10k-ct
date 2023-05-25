@@ -98,6 +98,8 @@
 // TODO-BEN:  Remove this and fix all instances of vif_to_arvif.
 #define ath10k_vif_to_arvif(a) (void*)(a->drv_priv)
 
+extern int _modparam_ofdm_peak_power_rssi;
+
 struct ath10k;
 
 static inline const char *ath10k_bus_str(enum ath10k_bus bus)
@@ -791,6 +793,11 @@ struct ath10k_fw_crash_data {
 	__le32 ram_bss_buf[ATH10K_RAM_BSS_BUF_LEN / sizeof(__le32)];
 };
 
+/* OFDM RSSI adjustments, for nss 1-4 */
+extern const int adjust_24[4];
+extern const int adjust_5[4];
+extern const int adjust_zero[4];
+
 struct ath10k_debug {
 	struct dentry *debugfs_phy;
 
@@ -800,6 +807,11 @@ struct ath10k_debug {
 	struct ath10k_fw_stats fw_stats;
 	struct completion fw_stats_complete;
 	bool fw_stats_done;
+	/* By default, ath10k RSSI is average power instead of OFDM peak power.
+	 * Enable this option to do a conversion to emulate OFDM peak power
+	 * when reporting RSSI.
+	 */
+	bool use_ofdm_peak_power;
 
 	unsigned long htt_stats_mask;
 	unsigned long reset_htt_stats;
