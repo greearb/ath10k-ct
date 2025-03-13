@@ -26,6 +26,7 @@
 #include "wmi-tlv.h"
 #include "wmi-ops.h"
 #include "wow.h"
+#include "leds.h"
 
 /*********/
 /* Rates */
@@ -2193,7 +2194,13 @@ static int ath10k_mac_vif_setup_ps(struct ath10k_vif *arvif)
 
 	enable_ps = arvif->ps;
 
-	if (enable_ps && ath10k_mac_num_vifs_started(ar) > 1 &&
+	/* CT firmware doesn't report MULTI_VIF_PS_SUPPORT, so we check
+	 * TXRATE_CT
+	 */
+	if (enable_ps &&
+	    ath10k_mac_num_vifs_started(ar) > 1 &&
+	    !test_bit(ATH10K_FW_FEATURE_TXRATE_CT,
+		    ar->running_fw->fw_file.fw_features) &&
 	    !test_bit(ATH10K_FW_FEATURE_MULTI_VIF_PS_SUPPORT,
 		      ar->running_fw->fw_file.fw_features)) {
 		ath10k_warn(ar, "refusing to enable ps on vdev %i: not supported by fw\n",
@@ -2460,7 +2467,7 @@ static void ath10k_peer_assoc_h_crypto(struct ath10k *ar,
 
 	lockdep_assert_held(&ar->conf_mutex);
 
-	if (WARN_ON(ath10k_mac_vif_chan(vif, &def)))
+	if (WARN_ON_ONCE(ath10k_mac_vif_chan(vif, &def)))
 		return;
 
 	bss = cfg80211_get_bss(ar->hw->wiphy, def.chan, info->bssid,
@@ -2518,7 +2525,7 @@ static void ath10k_peer_assoc_h_rates(struct ath10k *ar,
 
 	lockdep_assert_held(&ar->conf_mutex);
 
-	if (WARN_ON(ath10k_mac_vif_chan(vif, &def)))
+	if (WARN_ON_ONCE(ath10k_mac_vif_chan(vif, &def)))
 		return;
 
 	band = def.chan->band;
@@ -2643,7 +2650,7 @@ static void ath10k_peer_assoc_h_rate_overrides(struct ath10k *ar,
 
 	lockdep_assert_held(&ar->conf_mutex);
 
-	if (WARN_ON(ath10k_mac_vif_chan(vif, &def)))
+	if (WARN_ON_ONCE(ath10k_mac_vif_chan(vif, &def)))
 		return;
 
 	band = def.chan->band;
@@ -2784,7 +2791,7 @@ static void ath10k_peer_assoc_h_ht(struct ath10k *ar,
 
 	lockdep_assert_held(&ar->conf_mutex);
 
-	if (WARN_ON(ath10k_mac_vif_chan(vif, &def)))
+	if (WARN_ON_ONCE(ath10k_mac_vif_chan(vif, &def)))
 		return;
 
 	if (!ht_cap->ht_supported)
@@ -3058,7 +3065,7 @@ static void ath10k_peer_assoc_h_vht(struct ath10k *ar,
 	u8 max_nss, vht_mcs;
 	int i;
 
-	if (WARN_ON(ath10k_mac_vif_chan(vif, &def)))
+	if (WARN_ON_ONCE(ath10k_mac_vif_chan(vif, &def)))
 		return;
 
 	if (!vht_cap->vht_supported)
@@ -3326,7 +3333,7 @@ static void ath10k_peer_assoc_h_phymode(struct ath10k *ar,
 	const u16 *vht_mcs_mask;
 	enum wmi_phy_mode phymode = MODE_UNKNOWN;
 
-	if (WARN_ON(ath10k_mac_vif_chan(vif, &def)))
+	if (WARN_ON_ONCE(ath10k_mac_vif_chan(vif, &def)))
 		return;
 
 	band = def.chan->band;
@@ -6238,7 +6245,7 @@ err:
 	return ret;
 }
 
-static void ath10k_stop(struct ieee80211_hw *hw)
+static void ath10k_stop(struct ieee80211_hw *hw, bool suspend)
 {
 	struct ath10k *ar = hw->priv;
 	u32 opt;
@@ -7694,7 +7701,7 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 	arvif = arsta->arvif;
 	ar = arvif->ar;
 
-	if (WARN_ON(ath10k_mac_vif_chan(arvif->vif, &def)))
+	if (WARN_ON_ONCE(ath10k_mac_vif_chan(arvif->vif, &def)))
 		return;
 
 	band = def.chan->band;
@@ -7981,7 +7988,7 @@ ath10k_mac_tid_bitrate_config(struct ath10k *ar,
 	u8 nss, rate;
 	int vht_num_rates, ret;
 
-	if (WARN_ON(ath10k_mac_vif_chan(vif, &def)))
+	if (WARN_ON_ONCE(ath10k_mac_vif_chan(vif, &def)))
 		return -EINVAL;
 
 	if (txrate_type == NL80211_TX_RATE_AUTOMATIC) {
@@ -9586,9 +9593,10 @@ exit:
 
 static void ath10k_sta_rc_update(struct ieee80211_hw *hw,
 				 struct ieee80211_vif *vif,
-				 struct ieee80211_sta *sta,
+				 struct ieee80211_link_sta *link_sta,
 				 u32 changed)
 {
+	struct ieee80211_sta *sta = link_sta->sta;
 	struct ath10k *ar = hw->priv;
 	struct ath10k_sta *arsta = (struct ath10k_sta *)sta->drv_priv;
 	struct ath10k_vif *arvif = (void *)vif->drv_priv;
@@ -10243,7 +10251,7 @@ static const struct ath10k_index_vht_data_rate_type supported_vht_mcs_rate_nss1[
 	{6,  {2633, 2925}, {1215, 1350}, {585,  650} },
 	{7,  {2925, 3250}, {1350, 1500}, {650,  722} },
 	{8,  {3510, 3900}, {1620, 1800}, {780,  867} },
-	{9,  {3900, 4333}, {1800, 2000}, {780,  867} }
+	{9,  {3900, 4333}, {1800, 2000}, {865,  960} }
 };
 
 /*MCS parameters with Nss = 2 */
@@ -10258,7 +10266,7 @@ static const struct ath10k_index_vht_data_rate_type supported_vht_mcs_rate_nss2[
 	{6,  {5265, 5850}, {2430, 2700}, {1170, 1300} },
 	{7,  {5850, 6500}, {2700, 3000}, {1300, 1444} },
 	{8,  {7020, 7800}, {3240, 3600}, {1560, 1733} },
-	{9,  {7800, 8667}, {3600, 4000}, {1560, 1733} }
+	{9,  {7800, 8667}, {3600, 4000}, {1730, 1920} }
 };
 
 static void ath10k_mac_get_rate_flags_ht(struct ath10k *ar, u32 rate, u8 nss, u8 mcs,
@@ -10581,7 +10589,7 @@ static const struct ieee80211_ops ath10k_ops = {
 	.reconfig_complete		= ath10k_reconfig_complete,
 	.get_survey			= ath10k_get_survey,
 	.set_bitrate_mask		= ath10k_mac_op_set_bitrate_mask,
-	.sta_rc_update			= ath10k_sta_rc_update,
+	.link_sta_rc_update		= ath10k_sta_rc_update,
 	.offset_tsf			= ath10k_offset_tsf,
 	.get_tsf			= ath10k_get_tsf,
 	.ampdu_action			= ath10k_ampdu_action,
@@ -11157,9 +11165,9 @@ static int ath10k_mac_init_rd(struct ath10k *ar)
    } while (0)
 
 
-int ath10k_copy_comb(struct ath10k* ar,
-		     const struct ieee80211_iface_combination* comb,
-		     int array_len)
+static int ath10k_copy_comb(struct ath10k* ar,
+			    const struct ieee80211_iface_combination* comb,
+			    int array_len)
 {
 	int i;
 	int ln;
@@ -11626,6 +11634,7 @@ int ath10k_mac_register(struct ath10k *ar)
 	ar->hw->wiphy->n_cipher_suites = ar->hw_params.n_cipher_suites;
 
 	wiphy_ext_feature_set(ar->hw->wiphy, NL80211_EXT_FEATURE_CQM_RSSI_LIST);
+	wiphy_ext_feature_set(ar->hw->wiphy, NL80211_EXT_FEATURE_ETHTOOL_VDEV_STATS);
 
 	ar->hw->weight_multiplier = ATH10K_AIRTIME_WEIGHT_MULTIPLIER;
 
