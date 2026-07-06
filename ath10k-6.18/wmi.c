@@ -1945,12 +1945,17 @@ static void ath10k_wmi_tx_beacon_nowait(struct ath10k_vif *arvif)
 
 	/* Crash was seen here after FW crash.  ar and/or arvif were effectively NULL. */
 	if ((unsigned long)(arvif) < 8000) {
-		pr_err("wmi-tx-beacon-nowait, arvif: %p\n", arvif);
+		pr_err("wmi-tx-beacon-nowait, arvif too small: %p\n", arvif);
 		WARN_ON_ONCE(1);
 		return;
 	}
 
 	ar = arvif->ar;
+	if (!ar || (unsigned long)(ar) < 8000) {
+		pr_err("wmi-tx-beacon-nowait, ar invalid: arvif=%p ar=%p\n", arvif, ar);
+		WARN_ON_ONCE(1);
+		return;
+	}
 	spin_lock_bh(&ar->data_lock);
 
 	bcn = arvif->beacon;
