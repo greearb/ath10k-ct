@@ -1943,13 +1943,22 @@ static void ath10k_wmi_tx_beacon_nowait(struct ath10k_vif *arvif)
 	int ret;
 
 	/* Crash was seen here after FW crash.  ar and/or arvif were effectively NULL. */
-	if ((unsigned long)(arvif) < 8000) {
-		pr_err("wmi-tx-beacon-nowait, arvif: %p\n", arvif);
+	if ((unsigned long)(arvif) < 0x8000) {
+		pr_err("wmi-tx-beacon-nowait, arvif: %px\n", arvif);
 		WARN_ON_ONCE(1);
 		return;
 	}
 
 	ar = arvif->ar;
+
+	/* Crash was seen here after FW crash (1/4/2026).  ar and/or arvif were effectively NULL.
+	 * BUG: unable to handle page fault for address: 0000000000002e38
+	 */
+	if ((unsigned long)(ar) < 0x8000) {
+		pr_err("wmi-tx-beacon-nowait, arvif: %px\n", ar);
+		WARN_ON_ONCE(1);
+		return;
+	}
 	spin_lock_bh(&ar->data_lock);
 
 	bcn = arvif->beacon;
@@ -3200,7 +3209,7 @@ printme:
 	return 0;
 }
 
-int ath10k_wmi_event_txbf_cv_mesg(struct ath10k *ar, struct sk_buff *skb)
+static int ath10k_wmi_event_txbf_cv_mesg(struct ath10k *ar, struct sk_buff *skb)
 {
 	struct wmi_txbf_cv_event *ev;
 

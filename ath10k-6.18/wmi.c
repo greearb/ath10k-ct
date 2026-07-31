@@ -3,7 +3,6 @@
  * Copyright (c) 2005-2011 Atheros Communications Inc.
  * Copyright (c) 2011-2017 Qualcomm Atheros, Inc.
  * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
@@ -1944,13 +1943,22 @@ static void ath10k_wmi_tx_beacon_nowait(struct ath10k_vif *arvif)
 	int ret;
 
 	/* Crash was seen here after FW crash.  ar and/or arvif were effectively NULL. */
-	if ((unsigned long)(arvif) < 8000) {
-		pr_err("wmi-tx-beacon-nowait, arvif: %p\n", arvif);
+	if ((unsigned long)(arvif) < 0x8000) {
+		pr_err("wmi-tx-beacon-nowait, arvif: %px\n", arvif);
 		WARN_ON_ONCE(1);
 		return;
 	}
 
 	ar = arvif->ar;
+
+	/* Crash was seen here after FW crash (1/4/2026).  ar and/or arvif were effectively NULL.
+	 * BUG: unable to handle page fault for address: 0000000000002e38
+	 */
+	if ((unsigned long)(ar) < 0x8000) {
+		pr_err("wmi-tx-beacon-nowait, arvif: %px\n", ar);
+		WARN_ON_ONCE(1);
+		return;
+	}
 	spin_lock_bh(&ar->data_lock);
 
 	bcn = arvif->beacon;
@@ -2038,19 +2046,19 @@ int ath10k_wmi_cmd_send(struct ath10k *ar, struct sk_buff *skb, u32 cmd_id)
 			ret = -ESHUTDOWN;
 			ath10k_dbg(ar, ATH10K_DBG_WMI,
 				   "drop wmi command %d, hardware is wedged\n", cmd_id);
+		} else {
+			if (loops++ == 0) {
+				/* try to send pending beacons first. they take priority.  But, only
+				 * the first time through this loop. --Ben
+				 */
+				ath10k_wmi_tx_beacons_nowait(ar);
+			}
+
+			ret = ath10k_wmi_cmd_send_nowait(ar, skb, cmd_id);
+
+			if (ret && test_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags))
+				ret = -ESHUTDOWN;
 		}
-		if (loops++ == 0) {
-			/* try to send pending beacons first. they take priority.  But, only
-			 * the first time through this loop. --Ben
-			 */
-			ath10k_wmi_tx_beacons_nowait(ar);
-		}
-
-		ret = ath10k_wmi_cmd_send_nowait(ar, skb, cmd_id);
-
-		if (ret && test_bit(ATH10K_FLAG_CRASH_FLUSH, &ar->dev_flags))
-			ret = -ESHUTDOWN;
-
 		(ret != -EAGAIN);
 	}), 3 * HZ);
 
@@ -3206,7 +3214,7 @@ printme:
 	return 0;
 }
 
-int ath10k_wmi_event_txbf_cv_mesg(struct ath10k *ar, struct sk_buff *skb)
+static int ath10k_wmi_event_txbf_cv_mesg(struct ath10k *ar, struct sk_buff *skb)
 {
 	struct wmi_txbf_cv_event *ev;
 
@@ -5715,8 +5723,6 @@ ath10k_wmi_event_peer_sta_ps_state_chg(struct ath10k *ar, struct sk_buff *skb)
 	struct ath10k_sta *arsta;
 	u8 peer_addr[ETH_ALEN];
 
-	lockdep_assert_held(&ar->data_lock);
-
 	ev = (struct wmi_peer_sta_ps_state_chg_event *)skb->data;
 	ether_addr_copy(peer_addr, ev->peer_macaddr.addr);
 
@@ -5731,7 +5737,9 @@ ath10k_wmi_event_peer_sta_ps_state_chg(struct ath10k *ar, struct sk_buff *skb)
 	}
 
 	arsta = (struct ath10k_sta *)sta->drv_priv;
+	spin_lock_bh(&ar->data_lock);
 	arsta->peer_ps_state = __le32_to_cpu(ev->peer_ps_state);
+	spin_unlock_bh(&ar->data_lock);
 
 exit:
 	rcu_read_unlock();

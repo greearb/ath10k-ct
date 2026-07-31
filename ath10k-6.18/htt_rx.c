@@ -342,6 +342,15 @@ static inline struct sk_buff *ath10k_htt_rx_netbuf_pop(struct ath10k_htt *htt)
 	idx = htt->rx_ring.sw_rd_idx.msdu_payld;
 	msdu = htt->rx_ring.netbufs_ring[idx];
 	htt->rx_ring.netbufs_ring[idx] = NULL;
+	if (!msdu) {
+		ath10k_warn(ar, "rx ring slot %d empty while popping netbuf\n", idx);
+		ath10k_htt_reset_paddrs_ring(htt, idx);
+		idx++;
+		idx &= htt->rx_ring.size_mask;
+		htt->rx_ring.sw_rd_idx.msdu_payld = idx;
+		htt->rx_ring.fill_cnt--;
+		return NULL;
+	}
 	ath10k_htt_reset_paddrs_ring(htt, idx);
 
 	idx++;
