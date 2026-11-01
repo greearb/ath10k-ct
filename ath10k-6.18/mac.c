@@ -9731,6 +9731,49 @@ static void ath10k_sta_rc_update(struct ieee80211_hw *hw,
 }
 
 
+/* The TX power the firmware applies on the channel: its target power after
+ * band-edge limits and the configured limit, from the pdev stats in 0.5 dBm
+ * units, as ath11k reports. Without it mac80211 would report the configured
+ * limit, which is the regulatory maximum unless a user limit is set.
+ */
+static int ath10k_get_txpower(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+			      unsigned int link_id, int *dbm)
+{
+#ifdef CONFIG_ATH10K_DEBUGFS
+	struct ath10k *ar = hw->priv;
+	struct ath10k_vif *arvif = ath10k_vif_to_arvif(vif);
+	const struct ath10k_fw_stats_pdev *pdev;
+	u32 chan_tx_power = 0;
+
+	/* Only while the vdev runs on its channel: in a restart the firmware
+	 * reports 63 (31.5 dBm), whatever the channel.
+	 */
+	mutex_lock(&ar->conf_mutex);
+	if (ar->state == ATH10K_STATE_ON && arvif->is_started &&
+	    !ath10k_debug_fw_stats_request(ar)) {
+		spin_lock_bh(&ar->data_lock);
+		pdev = list_first_entry_or_null(&ar->debug.fw_stats.pdevs,
+						struct ath10k_fw_stats_pdev, list);
+		if (pdev)
+			chan_tx_power = pdev->chan_tx_power;
+		spin_unlock_bh(&ar->data_lock);
+	}
+	mutex_unlock(&ar->conf_mutex);
+
+	if (chan_tx_power) {
+		*dbm = chan_tx_power / 2;
+		return 0;
+	}
+#endif
+
+	/* no figure from the firmware: what mac80211 itself would report */
+	*dbm = vif->bss_conf.txpower;
+	if (*dbm == INT_MIN)
+		return -EINVAL;
+
+	return 0;
+}
+
 static u64 ath10k_get_tsf(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
 {
 	u64 rv = 0;
@@ -10639,6 +10682,7 @@ static const struct ieee80211_ops ath10k_ops = {
 	.get_antenna			= ath10k_get_antenna,
 	.reconfig_complete		= ath10k_reconfig_complete,
 	.get_survey			= ath10k_get_survey,
+	.get_txpower			= ath10k_get_txpower,
 	.set_bitrate_mask		= ath10k_mac_op_set_bitrate_mask,
 	.link_sta_rc_update		= ath10k_sta_rc_update,
 	.offset_tsf			= ath10k_offset_tsf,
