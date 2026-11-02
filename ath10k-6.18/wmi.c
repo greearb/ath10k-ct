@@ -2815,6 +2815,11 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 
 	for (i = 0; i < ARRAY_SIZE(status->chain_signal); i++) {
 		status->chains &= ~BIT(i);
+
+		/* only the chains the radio receives on, as in htt rx */
+		if (ar->cfg_rx_chainmask && !(ar->cfg_rx_chainmask & BIT(i)))
+			continue;
+
 		rssi = __le32_to_cpu(arg.rssi[i]);
 		ath10k_dbg(ar, ATH10K_DBG_MGMT, "mgmt rssi[%d]:%d\n", i, arg.rssi[i]);
 

@@ -2714,6 +2714,8 @@ int ath10k_sum_sigs_2(int a, int b) {
 	/* 0x80 means value-is-not-set */
 	if (b == 0x80)
 		return a;
+	if (a == 0x80)
+		return b;
 
 	if (a >= b) {
 		/* a is largest value, add to it. */
