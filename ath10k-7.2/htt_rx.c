@@ -1292,7 +1292,7 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 
 		if (rxd_ppdu_start->rssi_chains[i].pri20_mhz != 0x80) {
 #ifdef CONFIG_ATH10K_DEBUGFS
-			if (nfa[i] != 0x80) {
+			if (nfa[i] != 0x80 && ath10k_use_fw_noisefloor(ar)) {
 				nf = nfa[i];
 				has_nf = true;
 			}

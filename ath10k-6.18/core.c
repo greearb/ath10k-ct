@@ -3637,13 +3637,27 @@ const int adjust_24[4] = {8, 4, 3, 3};
 const int adjust_5[4] = {12, 12, 10, 10};
 const int adjust_zero[4] = {0, 0, 0, 0};
 
+/* QCA988x and QCA9887 report a per-chain noise floor that does not anchor
+ * their rx levels in dBm: a QCA9882's chain 0 reads -107 at 2.4 GHz, below
+ * the thermal floor of a 20 MHz channel. It also changes under the rx path:
+ * unset (so -95) for the first 2 s after each firmware start, then taken
+ * every 2 s on whatever channel the radio is on, so one signal reads up to
+ * 13 dB apart from one second to the next. Use the nominal noise floor on
+ * these chips, as upstream ath10k does.
+ */
+bool ath10k_use_fw_noisefloor(struct ath10k *ar)
+{
+	return ar->dev_id != QCA988X_2_0_DEVICE_ID &&
+	       ar->dev_id != QCA9887_1_0_DEVICE_ID;
+}
+
 /* Get noise floor of chain-1, ie for mgmt frames over wmi */
 int ath10k_get_noisefloor(int chain, struct ath10k *ar)
 {
 #ifdef CONFIG_ATH10K_DEBUGFS
 	struct ath10k_pdev_ext_stats_ct *pes = &ar->debug.pdev_ext_stats;
 	s32* nfa = &(pes->chan_nf_0);
-	if (nfa[chain] != 0x80) {
+	if (nfa[chain] != 0x80 && ath10k_use_fw_noisefloor(ar)) {
 		return nfa[chain];
 	}
 #endif

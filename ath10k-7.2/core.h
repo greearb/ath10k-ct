@@ -1736,6 +1736,7 @@ void ath10k_core_napi_enable(struct ath10k *ar);
 
 /* Get noise floor of chain-1, ie for mgmt frames over wmi */
 int ath10k_get_noisefloor(int chain, struct ath10k *ar);
+bool ath10k_use_fw_noisefloor(struct ath10k *ar);
 
 struct ath10k *ath10k_core_create(size_t priv_size, struct device *dev,
 				  enum ath10k_bus bus,
