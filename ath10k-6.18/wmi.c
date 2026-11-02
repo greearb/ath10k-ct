@@ -2772,10 +2772,24 @@ int ath10k_wmi_event_mgmt_rx(struct ath10k *ar, struct sk_buff *skb)
 	} else if (channel >= 36 && channel <= ATH10K_MAX_5G_CHAN) {
 		status->band = NL80211_BAND_5GHZ;
 	} else {
-		/* Shouldn't happen unless list of advertised channels to
-		 * mac80211 has been changed.
+		/* Not a channel mac80211 was given. CT 10.1 firmware reports
+		 * one (0xffff1f) for a frame heard right after it starts,
+		 * before the radio was set to any channel; a scan radio whose
+		 * interfaces come and go restarts it often. Drop the frame,
+		 * as htt rx drops frames heard with no channel configured.
 		 */
-		WARN_ON_ONCE(1);
+		ath10k_dbg(ar, ATH10K_DBG_MGMT,
+			   "wmi mgmt rx on unknown channel 0x%x (snr %u phy_mode %u), dropped\n",
+			   channel, snr, phy_mode);
+		dev_kfree_skb(skb);
+		return 0;
+	}
+
+	/* a channel of a band this radio does not have: mac80211 warns */
+	if (!ar->hw->wiphy->bands[status->band]) {
+		ath10k_dbg(ar, ATH10K_DBG_MGMT,
+			   "wmi mgmt rx on channel %u, band %d not registered, dropped\n",
+			   channel, status->band);
 		dev_kfree_skb(skb);
 		return 0;
 	}
