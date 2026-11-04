@@ -7288,8 +7288,8 @@ ath10k_wmi_op_gen_pdev_set_param(struct ath10k *ar, u32 id, u32 value)
 	struct sk_buff *skb;
 
 	if (id == WMI_PDEV_PARAM_UNSUPPORTED) {
-		ath10k_warn(ar, "pdev param %d not supported by firmware\n",
-			    id);
+		ath10k_dbg(ar, ATH10K_DBG_WMI,
+			   "pdev param %d not supported by firmware\n", id);
 		return ERR_PTR(-EOPNOTSUPP);
 	}
 
