@@ -1259,6 +1259,13 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 	int i;
 	const int* adjust = adjust_zero;
 	int nf = ATH10K_DEFAULT_NOISE_FLOOR;
+	/* The descriptor has four chain slots, and a chip with fewer chains
+	 * can fill the slots it does not have: an IPQ4019 (2x2) gives chains
+	 * 2 and 3 about -81 dBm on 2.4 GHz and -87 dBm on 5 GHz for a client
+	 * its two chains hear at -39/-35. Report only the chains the radio
+	 * receives on.
+	 */
+	u8 rx_chains = ar->cfg_rx_chainmask;
 	/* wave-1 appears to put garbage in the secondary signal fields, even though the
 	 * descriptor definition makes it look like it should work.  Or possibly some firmware
 	 * bug in wave-1.  Either way, not worth bothering with right now, so just don't sum up the
@@ -1290,9 +1297,12 @@ static void ath10k_htt_rx_h_signal(struct ath10k *ar,
 	for (i = 0; i < IEEE80211_MAX_CHAINS ; i++) {
 		status->chains &= ~BIT(i);
 
+		if (rx_chains && !(rx_chains & BIT(i)))
+			continue;
+
 		if (rxd_ppdu_start->rssi_chains[i].pri20_mhz != 0x80) {
 #ifdef CONFIG_ATH10K_DEBUGFS
-			if (nfa[i] != 0x80) {
+			if (nfa[i] != 0x80 && ath10k_use_fw_noisefloor(ar)) {
 				nf = nfa[i];
 				has_nf = true;
 			}

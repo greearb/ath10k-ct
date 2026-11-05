@@ -262,7 +262,7 @@ int ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 		if (!ch)
 			ch = ar->rx_channel;
 
-		if (ar->debug.nf_sum[0] != 0x80)
+		if (ar->debug.nf_sum[0] != 0x80 && ath10k_use_fw_noisefloor(ar))
 			nf = ar->debug.nf_sum[0];
 		if (ar->debug.use_ofdm_peak_power && ch) {
 			if (ch->band == NL80211_BAND_5GHZ)
