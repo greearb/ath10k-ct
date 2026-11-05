@@ -4735,10 +4735,15 @@ void ath10k_wmi_event_spectral_scan(struct ath10k *ar,
 
 	buf_len = phyerr->buf_len;
 
+	/* QCA988x firmware sends some FFT reports cut short (buf_len below the
+	 * length in their TLV header): drop those quietly, they are not host
+	 * errors.
+	 */
 	while (i < buf_len) {
 		if (i + sizeof(*tlv) > buf_len) {
-			ath10k_warn(ar, "failed to parse phyerr tlv header at byte %d\n",
-				    i);
+			ath10k_dbg(ar, ATH10K_DBG_WMI,
+				   "spectral report cut short by firmware: tlv header at byte %d of %d\n",
+				   i, buf_len);
 			return;
 		}
 
@@ -4747,8 +4752,9 @@ void ath10k_wmi_event_spectral_scan(struct ath10k *ar,
 		tlv_buf = &phyerr->buf[i + sizeof(*tlv)];
 
 		if (i + sizeof(*tlv) + tlv_len > buf_len) {
-			ath10k_warn(ar, "failed to parse phyerr tlv payload at byte %d\n",
-				    i);
+			ath10k_dbg(ar, ATH10K_DBG_WMI,
+				   "spectral report cut short by firmware: tlv payload at byte %d of %d\n",
+				   i, buf_len);
 			return;
 		}
 
