@@ -7444,9 +7444,15 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 			   ath10k_mac_max_vht_nss(vht_mcs_mask)));
 
 	if (changed & IEEE80211_RC_BW_CHANGED) {
+		struct wmi_peer_assoc_complete_arg arg = {};
 		enum wmi_phy_mode mode;
 
-		mode = chan_to_phymode(&def);
+		/* The phymode of the peer itself, as its peer assoc sets it.
+		 * chan_to_phymode() gives the mode of the channel: HT for a
+		 * 40 MHz channel, which takes VHT away from a VHT peer.
+		 */
+		ath10k_peer_assoc_h_phymode(ar, arvif->vif, sta, &arg);
+		mode = arg.peer_phymode;
 		ath10k_dbg(ar, ATH10K_DBG_MAC, "mac update sta %pM peer bw %d phymode %d\n",
 			   sta->addr, bw, mode);
 
@@ -7463,6 +7469,12 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 		if (err)
 			ath10k_warn(ar, "failed to update STA %pM peer bw %d: %d\n",
 				    sta->addr, bw, err);
+
+		/* The 10.4 firmware (QCA4019) does not set up the rates of the
+		 * peer again for the new phymode and width: after a channel
+		 * switch it sends at a fixed 24 Mbps. A peer assoc does.
+		 */
+		changed |= IEEE80211_RC_SUPP_RATES_CHANGED;
 	}
 
 	if (changed & IEEE80211_RC_NSS_CHANGED) {
