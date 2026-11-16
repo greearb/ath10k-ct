@@ -3854,7 +3854,7 @@ static void ath10k_htt_rx_tx_mode_switch_ind(struct ath10k *ar,
 	info1 = le16_to_cpu(resp->tx_mode_switch_ind.info1);
 
 	enable = !!(info0 & HTT_TX_MODE_SWITCH_IND_INFO0_ENABLE);
-	num_records = MS(info0, HTT_TX_MODE_SWITCH_IND_INFO1_THRESHOLD);
+	num_records = MS(info0, HTT_TX_MODE_SWITCH_IND_INFO0_NUM_RECORDS);
 	mode = MS(info1, HTT_TX_MODE_SWITCH_IND_INFO1_MODE);
 	threshold = MS(info1, HTT_TX_MODE_SWITCH_IND_INFO1_THRESHOLD);
 
