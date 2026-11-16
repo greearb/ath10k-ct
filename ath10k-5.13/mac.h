@@ -39,6 +39,7 @@ struct rfc1042_hdr {
 
 struct ath10k *ath10k_mac_create(size_t priv_size);
 void ath10k_mac_destroy(struct ath10k *ar);
+void ath10k_mac_ba_watch(struct ath10k *ar, struct ieee80211_txq *txq, bool failed);
 int ath10k_mac_register(struct ath10k *ar);
 void ath10k_mac_unregister(struct ath10k *ar);
 struct ath10k_vif *ath10k_get_arvif(struct ath10k *ar, u32 vdev_id);
