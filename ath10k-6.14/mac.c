@@ -7691,6 +7691,88 @@ unlock:
 	mutex_unlock(&arvif->ar->conf_mutex);
 }
 
+/*
+ * The firmware sets up and runs the tx block-ack sessions itself. Under
+ * channel contention, the sender's session to a peer can get out of sync
+ * with the receiver: every A-MPDU then fails, and nothing in the firmware
+ * recovers it (seen with QCA4019 10.4 firmware in an IBSS mesh, and the
+ * same from an AP to a WDS station). A delba makes the firmware set up a
+ * fresh session.
+ */
+#define ATH10K_BA_RESET_HOLDOFF	(5 * HZ)	/* Per peer */
+
+static unsigned int ath10k_ba_reset_fails = 30;
+module_param_named(ba_reset_fails, ath10k_ba_reset_fails, uint, 0644);
+MODULE_PARM_DESC(ba_reset_fails, "Reset a peer's tx block-ack session after this many unicast tx failures in a row (0: never)");
+
+static void ath10k_sta_ba_reset_wk(struct work_struct *wk)
+{
+	struct ath10k_sta *arsta = container_of(wk, struct ath10k_sta, ba_reset_wk);
+	struct ieee80211_sta *sta = container_of((void *)arsta, struct ieee80211_sta, drv_priv);
+	struct ath10k_vif *arvif = arsta->arvif;
+	struct ath10k *ar = arvif->ar;
+	unsigned long tids = xchg(&arsta->ba_tids, 0);
+	int tid;
+	int ret;
+
+	mutex_lock(&ar->conf_mutex);
+
+	if (ar->state != ATH10K_STATE_ON)
+		goto out;
+
+	ath10k_info(ar, "peer %pM: unicast frames keep failing, resetting its tx block-ack session (tids 0x%lx)\n",
+		    sta->addr, tids);
+
+	for_each_set_bit(tid, &tids, IEEE80211_NUM_TIDS) {
+		ret = ath10k_wmi_delba_send(ar, arvif->vdev_id, sta->addr, tid,
+					    1 /* initiator */, WLAN_REASON_UNSPECIFIED);
+		if (ret)
+			ath10k_warn(ar, "failed to send delba to %pM tid %d: %d\n",
+				    sta->addr, tid, ret);
+	}
+
+out:
+	mutex_unlock(&ar->conf_mutex);
+}
+
+/* Called with every unicast tx completion, under rcu_read_lock() */
+void ath10k_mac_ba_watch(struct ath10k *ar, struct ieee80211_txq *txq, bool failed)
+{
+	unsigned int limit = READ_ONCE(ath10k_ba_reset_fails);
+	struct ath10k_sta *arsta;
+	struct ath10k_vif *arvif;
+
+	if (!limit || !txq->sta || txq->tid >= IEEE80211_NUM_TIDS)
+		return;
+
+	arvif = (void *)txq->vif->drv_priv;
+
+	/* IBSS and mesh peers, an AP's stations (WDS ones too) and a station's AP */
+	if (arvif->vif->type != NL80211_IFTYPE_ADHOC &&
+	    arvif->vif->type != NL80211_IFTYPE_MESH_POINT &&
+	    arvif->vif->type != NL80211_IFTYPE_AP &&
+	    arvif->vif->type != NL80211_IFTYPE_STATION)
+		return;
+
+	arsta = (void *)txq->sta->drv_priv;
+
+	if (!failed) {
+		atomic_set(&arsta->ba_fails, 0);
+		return;
+	}
+
+	if (atomic_inc_return(&arsta->ba_fails) < limit)
+		return;
+
+	if (time_before(jiffies, arsta->ba_last_reset + ATH10K_BA_RESET_HOLDOFF))
+		return;
+
+	arsta->ba_last_reset = jiffies;
+	atomic_set(&arsta->ba_fails, 0);
+	set_bit(txq->tid, &arsta->ba_tids);
+	ieee80211_queue_work(ar->hw, &arsta->ba_reset_wk);
+}
+
 static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 {
 	struct ath10k *ar;
@@ -7734,9 +7816,15 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 			   ath10k_mac_max_vht_nss(vht_mcs_mask)));
 
 	if (changed & IEEE80211_RC_BW_CHANGED) {
+		struct wmi_peer_assoc_complete_arg arg = {};
 		enum wmi_phy_mode mode;
 
-		mode = chan_to_phymode(&def);
+		/* The phymode of the peer itself, as its peer assoc sets it.
+		 * chan_to_phymode() gives the mode of the channel: HT for a
+		 * 40 MHz channel, which takes VHT away from a VHT peer.
+		 */
+		ath10k_peer_assoc_h_phymode(ar, arvif->vif, sta, &arg);
+		mode = arg.peer_phymode;
 		ath10k_dbg(ar, ATH10K_DBG_STA, "mac update sta %pM peer bw %d phymode %d\n",
 			   sta->addr, bw, mode);
 
@@ -7753,6 +7841,12 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 		if (err)
 			ath10k_warn(ar, "failed to update STA %pM peer bw %d: %d\n",
 				    sta->addr, bw, err);
+
+		/* The 10.4 firmware (QCA4019) does not set up the rates of the
+		 * peer again for the new phymode and width: after a channel
+		 * switch it sends at a fixed 24 Mbps. A peer assoc does.
+		 */
+		changed |= IEEE80211_RC_SUPP_RATES_CHANGED;
 	}
 
 	if (changed & IEEE80211_RC_NSS_CHANGED) {
@@ -8455,6 +8549,9 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 		arsta->peer_ps_state = WMI_PEER_PS_STATE_DISABLED;
 		INIT_WORK(&arsta->update_wk, ath10k_sta_rc_update_wk);
 		INIT_WORK(&arsta->tid_config_wk, ath10k_sta_tid_cfg_wk);
+		INIT_WORK(&arsta->ba_reset_wk, ath10k_sta_ba_reset_wk);
+		/* jiffies start negative: not 0, that holds off for minutes */
+		arsta->ba_last_reset = jiffies - ATH10K_BA_RESET_HOLDOFF;
 
 		for (i = 0; i < ARRAY_SIZE(sta->txq); i++)
 			ath10k_mac_txq_init(sta->txq[i]);
@@ -8465,6 +8562,7 @@ static int ath10k_sta_state(struct ieee80211_hw *hw,
 	     new_state == IEEE80211_STA_NOTEXIST)) {
 		cancel_work_sync(&arsta->update_wk);
 		cancel_work_sync(&arsta->tid_config_wk);
+		cancel_work_sync(&arsta->ba_reset_wk);
 	}
 
 	mutex_lock(&ar->conf_mutex);

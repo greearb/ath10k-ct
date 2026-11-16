@@ -586,6 +586,58 @@ void ath10k_hw_fill_survey_time(struct ath10k *ar, struct survey_info *survey,
 	survey->time_busy = CCNT_TO_MSEC(ar, rcc);
 }
 
+/* The 10.4 firmware (QCA99X0, QCA9984, QCA9888, QCA4019) does not give the
+ * host its slot time and ack timeout registers, but takes the ack timeout as
+ * a pdev parameter, in microseconds: 0x40 (64 us) by default, up to 0xff.
+ *
+ * Measured on QCA4019: an ack timeout of 21 us still works at 0 m, 20 us does
+ * not; over 302 m (2 us round trip) 23 us works and 22 us does not. Add 3 us
+ * per coverage class to the default, as the QCA988X registers get it.
+ */
+static void ath10k_hw_qca99xx_set_coverage_class(struct ath10k *ar,
+						 s16 value)
+{
+	u32 timeout;
+	int ret;
+
+	mutex_lock(&ar->conf_mutex);
+
+	if (value < 0)
+		value = ar->fw_coverage.coverage_class;
+
+	spin_lock_bh(&ar->data_lock);
+	ar->fw_coverage.coverage_class = value;
+	spin_unlock_bh(&ar->data_lock);
+
+	/* Not started: the value is applied when the firmware is up, from
+	 * set_coverage_class_work (queued on vdev start and other events)
+	 */
+	if (ar->state != ATH10K_STATE_ON &&
+	    ar->state != ATH10K_STATE_RESTARTED) {
+		ath10k_dbg(ar, ATH10K_DBG_MAC,
+			   "coverage class %d stored, firmware not started\n",
+			   value);
+		goto unlock;
+	}
+
+	if (value > 0)
+		timeout = min_t(u32, 0x40 + 3 * value, 0xff);
+	else
+		timeout = 0x40;
+
+	/* Sent every time: the host cannot read it back, and this is what
+	 * keeps it in force after the firmware was restarted.
+	 */
+	ret = ath10k_wmi_pdev_set_param(ar, ar->wmi.pdev_param->tx_ack_timeout,
+					timeout);
+	if (ret)
+		ath10k_warn(ar, "failed to set tx ack timeout 0x%x (coverage class %d): %d\n",
+			    timeout, value, ret);
+
+unlock:
+	mutex_unlock(&ar->conf_mutex);
+}
+
 /* The stock firmware does not support setting the coverage class. Instead this
  * function monitors and modifies the corresponding MAC registers.
  */
@@ -1162,6 +1214,7 @@ const struct ath10k_hw_ops qca988x_ops = {
 };
 
 const struct ath10k_hw_ops qca99x0_ops = {
+	.set_coverage_class = ath10k_hw_qca99xx_set_coverage_class,
 	.is_rssi_enable = ath10k_htt_tx_rssi_enable,
 };
 

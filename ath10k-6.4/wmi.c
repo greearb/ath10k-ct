@@ -1164,6 +1164,7 @@ static struct wmi_pdev_param_map wmi_pdev_param_map = {
 	.arp_srcaddr = WMI_PDEV_PARAM_UNSUPPORTED,
 	.arp_dstaddr = WMI_PDEV_PARAM_UNSUPPORTED,
 	.enable_btcoex = WMI_PDEV_PARAM_UNSUPPORTED,
+	.tx_ack_timeout = WMI_PDEV_PARAM_UNSUPPORTED,
 };
 
 static struct wmi_pdev_param_map wmi_10x_pdev_param_map = {
@@ -1260,6 +1261,7 @@ static struct wmi_pdev_param_map wmi_10x_pdev_param_map = {
 	.arp_srcaddr = WMI_PDEV_PARAM_UNSUPPORTED,
 	.arp_dstaddr = WMI_PDEV_PARAM_UNSUPPORTED,
 	.enable_btcoex = WMI_PDEV_PARAM_UNSUPPORTED,
+	.tx_ack_timeout = WMI_PDEV_PARAM_UNSUPPORTED,
 };
 
 static struct wmi_pdev_param_map wmi_10_2_4_pdev_param_map = {
@@ -1357,6 +1359,7 @@ static struct wmi_pdev_param_map wmi_10_2_4_pdev_param_map = {
 	.arp_srcaddr = WMI_PDEV_PARAM_UNSUPPORTED,
 	.arp_dstaddr = WMI_PDEV_PARAM_UNSUPPORTED,
 	.enable_btcoex = WMI_PDEV_PARAM_UNSUPPORTED,
+	.tx_ack_timeout = WMI_PDEV_PARAM_UNSUPPORTED,
 };
 
 /* firmware 10.2 specific mappings */
@@ -1617,6 +1620,7 @@ static struct wmi_pdev_param_map wmi_10_4_pdev_param_map = {
 	.arp_srcaddr = WMI_10_4_PDEV_PARAM_ARP_SRCADDR,
 	.arp_dstaddr = WMI_10_4_PDEV_PARAM_ARP_DSTADDR,
 	.enable_btcoex = WMI_10_4_PDEV_PARAM_ENABLE_BTCOEX,
+	.tx_ack_timeout = WMI_10_4_PDEV_PARAM_TX_ACK_TIMEOUT,
 };
 
 static const u8 wmi_key_cipher_suites[] = {

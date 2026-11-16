@@ -601,6 +601,12 @@ struct ath10k_sta {
 	u32 tx_bitrate_kbps;
 	struct work_struct update_wk;
 	u64 rx_duration;
+
+	/* A tx block-ack session the peer no longer accepts: see ath10k_mac_ba_watch() */
+	atomic_t ba_fails;		/* Unicast tx failed in a row */
+	unsigned long ba_last_reset;	/* jiffies */
+	unsigned long ba_tids;		/* Sessions to reset */
+	struct work_struct ba_reset_wk;
 	struct ath10k_htt_tx_stats *tx_stats;
 	u32 ucast_cipher;
 

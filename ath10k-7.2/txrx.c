@@ -253,6 +253,13 @@ int ath10k_txrx_tx_unref(struct ath10k_htt *htt,
 		tx_failed = true;
 	}
 
+	if (txq && !(info->flags & IEEE80211_TX_CTL_NO_ACK) &&
+	    !(flags & ATH10K_SKB_F_NOACK_TID)) {
+		rcu_read_lock();
+		ath10k_mac_ba_watch(ar, txq, tx_failed);
+		rcu_read_unlock();
+	}
+
 	if (tx_done->status == HTT_TX_COMPL_STATE_ACK &&
 	    tx_done->ack_rssi != ATH10K_INVALID_RSSI) {
 		int nf = ATH10K_DEFAULT_NOISE_FLOOR;

@@ -3939,6 +3939,7 @@ struct wmi_pdev_param_map {
 	u32 rfkill_config;
 	u32 rfkill_enable;
 	u32 peer_stats_info_enable;
+	u32 tx_ack_timeout;
 };
 
 #define WMI_PDEV_PARAM_UNSUPPORTED 0
@@ -4259,6 +4260,8 @@ enum wmi_10_4_pdev_param {
 	WMI_10_4_PDEV_PARAM_ATF_DYNAMIC_ENABLE,
 	WMI_10_4_PDEV_PARAM_ATF_SSID_GROUP_POLICY,
 	WMI_10_4_PDEV_PARAM_ENABLE_BTCOEX,
+	/* TX acknowledge timeout. Advised range: 0x40 - 0xFF microsec. */
+	WMI_10_4_PDEV_PARAM_TX_ACK_TIMEOUT = 0x68,
 };
 
 struct wmi_pdev_set_param_cmd {

@@ -6284,6 +6284,12 @@ static void ath10k_sta_rc_update_wk(struct work_struct *wk)
 		if (err)
 			ath10k_warn(ar, "failed to update STA %pM peer bw %d: %d\n",
 				    sta->addr, bw, err);
+
+		/* The 10.4 firmware (QCA4019) does not set up the rates of the
+		 * peer again for the new phymode and width: after a channel
+		 * switch it sends at a fixed 24 Mbps. A peer assoc does.
+		 */
+		changed |= IEEE80211_RC_SUPP_RATES_CHANGED;
 	}
 
 	if (changed & IEEE80211_RC_NSS_CHANGED) {
